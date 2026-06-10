@@ -334,6 +334,12 @@
 
             <dependency>
                 <groupId>org.dromara</groupId>
+                <artifactId>ruoyi-creator</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.dromara</groupId>
                 <artifactId>ruoyi-job</artifactId>
                 <version>${revision}</version>
             </dependency>
