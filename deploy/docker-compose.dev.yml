@@ -1,0 +1,81 @@
+services:
+  mysql:
+    image: mysql:8.0.42
+    container_name: tiktok-platform-mysql
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ry-vue
+    ports:
+      - "13307:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --explicit_defaults_for_timestamp=true
+      - --lower_case_table_names=1
+    volumes:
+      - tiktok_platform_mysql_data:/var/lib/mysql
+      - ../server/script/sql/ry_vue_5.X.sql:/docker-entrypoint-initdb.d/01-ry-vue.sql:ro
+      - ../server/script/sql/ry_job.sql:/docker-entrypoint-initdb.d/02-ry-job.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: tiktok-platform-redis
+    restart: unless-stopped
+    ports:
+      - "16380:6379"
+    command: ["redis-server", "--requirepass", "ruoyi123", "--appendonly", "yes"]
+    volumes:
+      - tiktok_platform_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "ruoyi123", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  minio:
+    image: minio/minio:latest
+    container_name: tiktok-platform-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ruoyi
+      MINIO_ROOT_PASSWORD: ruoyi123
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - tiktok_platform_minio_data:/data
+
+  snailjob:
+    profiles:
+      - container-snailjob
+    image: ruoyi/ruoyi-snailjob-server:5.6.1
+    container_name: tiktok-platform-snailjob
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ry-vue?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SNAIL_JOB_SERVER_HOST: snailjob
+      SNAIL_JOB_SERVER_PORT: 17888
+      SPRING_BOOT_ADMIN_CLIENT_ENABLED: "false"
+    ports:
+      - "18800:8800"
+      - "17889:17888"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  tiktok_platform_mysql_data:
+  tiktok_platform_redis_data:
+  tiktok_platform_minio_data:

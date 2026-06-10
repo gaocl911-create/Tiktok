@@ -1,0 +1,45 @@
+# Environment and secrets
+/.env
+/.env.*
+!/.env.example
+application-local.yml
+application-local.yaml
+
+# Java
+target/
+*.class
+*.jar
+*.war
+*.log
+.flattened-pom.xml
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Runtime data
+logs/
+uploads/
+tmp/
+temp/
+minio-data/
+mysql-data/
+redis-data/
