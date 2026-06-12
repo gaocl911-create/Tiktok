@@ -1,7 +1,10 @@
 package org.dromara.creator.mapper;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.dromara.common.mybatis.annotation.DataColumn;
+import org.dromara.common.mybatis.annotation.DataPermission;
 import org.dromara.common.mybatis.core.mapper.BaseMapperPlus;
 import org.dromara.creator.domain.CmContentPost;
 
@@ -9,6 +12,23 @@ import org.dromara.creator.domain.CmContentPost;
  * Content post mapper.
  */
 public interface CmContentPostMapper extends BaseMapperPlus<CmContentPost, CmContentPost> {
+
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "mt.owner_dept_id"),
+        @DataColumn(key = "userName", value = "mt.owner_user_id"),
+        @DataColumn(key = "superiorName", value = "COALESCE(mt.direct_superior_user_id,"
+            + " (SELECT leader FROM sys_dept WHERE dept_id = mt.owner_dept_id))")
+    })
+    Page<CmContentPost> selectScopedPage(@Param("page") Page<CmContentPost> page,
+                                         @Param("query") CmContentPost query);
+
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "mt.owner_dept_id"),
+        @DataColumn(key = "userName", value = "mt.owner_user_id"),
+        @DataColumn(key = "superiorName", value = "COALESCE(mt.direct_superior_user_id,"
+            + " (SELECT leader FROM sys_dept WHERE dept_id = mt.owner_dept_id))")
+    })
+    CmContentPost selectScopedById(@Param("contentId") Long contentId);
 
     /**
      * Find content by (platform, platform_content_id) including soft-deleted rows.

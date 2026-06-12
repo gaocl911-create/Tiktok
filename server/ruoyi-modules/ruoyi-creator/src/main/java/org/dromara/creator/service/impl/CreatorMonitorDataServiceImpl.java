@@ -4,10 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
-import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.creator.domain.*;
 import org.dromara.creator.mapper.*;
 import org.dromara.creator.service.ICreatorMonitorDataService;
@@ -17,7 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
-import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Data service for creator monitor core tables.
@@ -37,7 +38,7 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
 
     @Override
     public CmCreatorAccount queryCreatorById(Long creatorId) {
-        return creatorAccountMapper.selectById(creatorId);
+        return creatorAccountMapper.selectScopedById(creatorId);
     }
 
     @Override
@@ -51,7 +52,7 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
 
     @Override
     public CmContentPost queryContentById(Long contentId) {
-        return contentPostMapper.selectById(contentId);
+        return contentPostMapper.selectScopedById(contentId);
     }
 
     @Override
@@ -65,7 +66,8 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
 
     @Override
     public CmMonitorTarget queryTargetById(Long targetId) {
-        return monitorTargetMapper.selectById(targetId);
+        return monitorTargetMapper.selectScopedOne(
+            Wrappers.<CmMonitorTarget>lambdaQuery().eq(CmMonitorTarget::getTargetId, targetId));
     }
 
     @Override
@@ -73,9 +75,8 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
         LambdaQueryWrapper<CmMonitorTarget> directTargetQuery = Wrappers.lambdaQuery();
         directTargetQuery.eq(CmMonitorTarget::getContentId, contentId);
         directTargetQuery.eq(CmMonitorTarget::getStatus, "active");
-        directTargetQuery.eq(!canViewAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId());
         directTargetQuery.last("limit 1");
-        CmMonitorTarget directTarget = monitorTargetMapper.selectOne(directTargetQuery);
+        CmMonitorTarget directTarget = monitorTargetMapper.selectScopedOne(directTargetQuery);
         if (directTarget != null) {
             return directTarget;
         }
@@ -86,10 +87,11 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
         relationQuery.orderByDesc(CmMonitorTargetContent::getFirstBoundAt);
         relationQuery.last("limit 50");
         for (CmMonitorTargetContent relation : targetContentMapper.selectList(relationQuery)) {
-            CmMonitorTarget target = monitorTargetMapper.selectById(relation.getTargetId());
-            if (target != null
-                && "active".equals(target.getStatus())
-                && (canViewAllTargets() || Objects.equals(target.getOwnerUserId(), LoginHelper.getUserId()))) {
+            CmMonitorTarget target = monitorTargetMapper.selectScopedOne(
+                Wrappers.<CmMonitorTarget>lambdaQuery()
+                    .eq(CmMonitorTarget::getTargetId, relation.getTargetId())
+                    .eq(CmMonitorTarget::getStatus, "active"));
+            if (target != null) {
                 return target;
             }
         }
@@ -98,60 +100,13 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
 
     @Override
     public TableDataInfo<CmCreatorAccount> queryCreatorPage(CmCreatorAccount query, PageQuery pageQuery) {
-        LambdaQueryWrapper<CmCreatorAccount> lqw = Wrappers.lambdaQuery();
-        lqw.eq(StringUtils.isNotBlank(query.getTenantId()), CmCreatorAccount::getTenantId, query.getTenantId());
-        lqw.eq(StringUtils.isNotBlank(query.getPlatform()), CmCreatorAccount::getPlatform, query.getPlatform());
-        lqw.eq(StringUtils.isNotBlank(query.getPlatformCreatorId()), CmCreatorAccount::getPlatformCreatorId, query.getPlatformCreatorId());
-        lqw.like(StringUtils.isNotBlank(query.getNickname()), CmCreatorAccount::getNickname, query.getNickname());
-        lqw.eq(StringUtils.isNotBlank(query.getProfileStatus()), CmCreatorAccount::getProfileStatus, query.getProfileStatus());
-        if (canViewAllTargets()) {
-            lqw.exists("SELECT 1 FROM cm_monitor_target mt"
-                + " WHERE mt.creator_id = cm_creator_account.creator_id"
-                + " AND mt.target_type = 'creator_collection'"
-                + " AND mt.status = 'active' AND mt.del_flag = '0'");
-        } else {
-            lqw.exists("SELECT 1 FROM cm_monitor_target mt"
-                    + " WHERE mt.creator_id = cm_creator_account.creator_id"
-                    + " AND mt.target_type = 'creator_collection'"
-                    + " AND mt.status = 'active' AND mt.del_flag = '0'"
-                    + " AND mt.owner_user_id = {0}",
-                LoginHelper.getUserId());
-        }
-        lqw.orderByDesc(CmCreatorAccount::getUpdateTime);
-        Page<CmCreatorAccount> page = creatorAccountMapper.selectPage(pageQuery.build(), lqw);
+        Page<CmCreatorAccount> page = creatorAccountMapper.selectScopedPage(pageQuery.build(), query);
         return TableDataInfo.build(page);
     }
 
     @Override
     public TableDataInfo<CmContentPost> queryContentPage(CmContentPost query, PageQuery pageQuery) {
-        LambdaQueryWrapper<CmContentPost> lqw = Wrappers.lambdaQuery();
-        lqw.eq(StringUtils.isNotBlank(query.getTenantId()), CmContentPost::getTenantId, query.getTenantId());
-        lqw.eq(StringUtils.isNotBlank(query.getPlatform()), CmContentPost::getPlatform, query.getPlatform());
-        lqw.eq(query.getCreatorId() != null, CmContentPost::getCreatorId, query.getCreatorId());
-        lqw.eq(StringUtils.isNotBlank(query.getPlatformContentId()), CmContentPost::getPlatformContentId, query.getPlatformContentId());
-        lqw.eq(StringUtils.isNotBlank(query.getAddedSource()), CmContentPost::getAddedSource, query.getAddedSource());
-        lqw.eq(StringUtils.isNotBlank(query.getMetricsStatus()), CmContentPost::getMetricsStatus, query.getMetricsStatus());
-        lqw.and(StringUtils.isNotBlank(query.getTitle()), wrapper -> wrapper
-            .like(CmContentPost::getTitle, query.getTitle())
-            .or()
-            .like(CmContentPost::getDescription, query.getTitle()));
-        if (canViewAllTargets()) {
-            lqw.exists("SELECT 1 FROM cm_monitor_target_content mtc"
-                + " INNER JOIN cm_monitor_target mt ON mt.target_id = mtc.target_id"
-                + " WHERE mtc.content_id = cm_content_post.content_id"
-                + " AND mtc.status = 'active' AND mtc.del_flag = '0'"
-                + " AND mt.status = 'active' AND mt.del_flag = '0'");
-        } else {
-            lqw.exists("SELECT 1 FROM cm_monitor_target_content mtc"
-                    + " INNER JOIN cm_monitor_target mt ON mt.target_id = mtc.target_id"
-                    + " WHERE mtc.content_id = cm_content_post.content_id"
-                    + " AND mtc.status = 'active' AND mtc.del_flag = '0'"
-                    + " AND mt.status = 'active' AND mt.del_flag = '0'"
-                    + " AND mt.owner_user_id = {0}",
-                LoginHelper.getUserId());
-        }
-        lqw.orderByDesc(CmContentPost::getPublishTime, CmContentPost::getFirstSeenAt);
-        Page<CmContentPost> page = contentPostMapper.selectPage(pageQuery.build(), lqw);
+        Page<CmContentPost> page = contentPostMapper.selectScopedPage(pageQuery.build(), query);
         return TableDataInfo.build(page);
     }
 
@@ -169,16 +124,13 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
         lqw.eq(StringUtils.isNotBlank(query.getDataStatus()), CmMonitorTarget::getDataStatus, query.getDataStatus());
         lqw.like(StringUtils.isNotBlank(query.getTargetName()), CmMonitorTarget::getTargetName, query.getTargetName());
         lqw.orderByDesc(CmMonitorTarget::getUpdateTime);
-        Page<CmMonitorTarget> page = monitorTargetMapper.selectPage(pageQuery.build(), lqw);
+        Page<CmMonitorTarget> page = monitorTargetMapper.selectScopedPage(pageQuery.build(), lqw);
         return TableDataInfo.build(page);
-    }
-
-    private boolean canViewAllTargets() {
-        return LoginHelper.isSuperAdmin() || LoginHelper.isTenantAdmin();
     }
 
     @Override
     public List<CmContentSnapshot> queryRecentContentSnapshots(Long contentId, int limit) {
+        requireVisibleContent(contentId);
         LambdaQueryWrapper<CmContentSnapshot> lqw = Wrappers.lambdaQuery();
         lqw.eq(CmContentSnapshot::getContentId, contentId);
         lqw.orderByDesc(CmContentSnapshot::getCollectedAt);
@@ -188,6 +140,7 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
 
     @Override
     public List<CmCollectionRun> queryRecentCollectionRuns(Long targetId, int limit) {
+        requireVisibleTarget(targetId);
         LambdaQueryWrapper<CmCollectionRun> lqw = Wrappers.lambdaQuery();
         lqw.eq(targetId != null, CmCollectionRun::getTargetId, targetId);
         lqw.orderByDesc(CmCollectionRun::getStartedAt);
@@ -197,6 +150,7 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
 
     @Override
     public List<CmCollectionRun> queryRecentContentRuns(Long contentId, int limit) {
+        requireVisibleContent(contentId);
         LambdaQueryWrapper<CmCollectionRun> lqw = Wrappers.lambdaQuery();
         lqw.eq(CmCollectionRun::getContentId, contentId);
         lqw.orderByDesc(CmCollectionRun::getStartedAt);
@@ -273,7 +227,37 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Boolean deleteTargetsByIds(Collection<Long> targetIds) {
-        return monitorTargetMapper.deleteByIds(targetIds) > 0;
+        if (targetIds == null || targetIds.isEmpty()) {
+            return false;
+        }
+        Set<Long> requestedIds = Set.copyOf(targetIds);
+        Set<Long> visibleIds = monitorTargetMapper.selectScopedList(
+                Wrappers.<CmMonitorTarget>lambdaQuery()
+                    .select(CmMonitorTarget::getTargetId)
+                    .in(CmMonitorTarget::getTargetId, requestedIds))
+            .stream()
+            .map(CmMonitorTarget::getTargetId)
+            .collect(Collectors.toSet());
+        if (!visibleIds.equals(requestedIds)) {
+            throw new ServiceException("monitor target not found or access denied.");
+        }
+        return monitorTargetMapper.deleteByIds(visibleIds) > 0;
+    }
+
+    private CmMonitorTarget requireVisibleTarget(Long targetId) {
+        CmMonitorTarget target = queryTargetById(targetId);
+        if (target == null) {
+            throw new ServiceException("monitor target not found or access denied.");
+        }
+        return target;
+    }
+
+    private CmContentPost requireVisibleContent(Long contentId) {
+        CmContentPost content = queryContentById(contentId);
+        if (content == null) {
+            throw new ServiceException("content not found or access denied.");
+        }
+        return content;
     }
 
     private int normalizedLimit(int limit, int defaultLimit, int maxLimit) {

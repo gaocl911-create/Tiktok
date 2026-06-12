@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.exception.ServiceException;
+import org.dromara.common.core.service.DeptService;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.json.utils.JsonUtils;
 import org.dromara.common.satoken.utils.LoginHelper;
@@ -50,6 +51,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
     private final CmCollectionRunMapper collectionRunMapper;
     private final CmApiCallLogMapper apiCallLogMapper;
     private final ICreatorAlertService creatorAlertService;
+    private final DeptService deptService;
 
     private final TikHubDouyinMapper tikHubDouyinMapper = new TikHubDouyinMapper();
 
@@ -66,7 +68,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
             CmCreatorAccount creator = findCreator(profile);
             boolean creatorCreated = creator == null;
             creator = upsertCreator(creator, bo.getPlatform(), profile);
-            CmMonitorTarget target = findCreatorTarget(creator.getCreatorId());
+            CmMonitorTarget target = findOwnedCreatorTarget(creator.getCreatorId());
             boolean targetCreated = target == null;
             target = upsertCreatorTarget(target, creator, bo, startedAt);
             saveCreatorSnapshot(creator, target.getTargetId(), profile);
@@ -106,7 +108,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
             CmContentPost content = findContent(bo.getPlatform(), contentProfile.getPlatformContentId());
             boolean contentCreated = content == null;
             content = upsertContent(content, creator, bo.getPlatform(), contentProfile, "manual_link");
-            CmMonitorTarget target = findSingleContentTarget(content.getContentId());
+            CmMonitorTarget target = findOwnedSingleContentTarget(content.getContentId());
             boolean targetCreated = target == null;
             target = upsertSingleContentTarget(target, creator, content, bo, startedAt);
             bindTargetContent(target, content, "manual_link", true);
@@ -137,9 +139,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         target.setTargetType(bo.getTargetType());
         target.setPlatform(bo.getPlatform());
         target.setTargetName(defaultText(bo.getTargetName(), content != null ? content.getTitle() : creator.getNickname()));
-        target.setOwnerUserId(defaultLong(bo.getOwnerUserId(), LoginHelper.getUserId()));
-        target.setOwnerDeptId(defaultLong(bo.getOwnerDeptId(), LoginHelper.getDeptId()));
-        target.setDirectSuperiorUserId(bo.getDirectSuperiorUserId());
+        applyOwner(target, bo.getOwnerUserId(), bo.getOwnerDeptId(), bo.getDirectSuperiorUserId());
         target.setCreatorId(creator != null ? creator.getCreatorId() : content.getCreatorId());
         target.setContentId(content == null ? null : content.getContentId());
         target.setBaselineTime(bo.getBaselineTime() == null ? now : bo.getBaselineTime());
@@ -174,7 +174,10 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         lqw.orderByAsc(CmMonitorTarget::getNextContentCollectAt);
         lqw.last("limit " + Math.max(1, limit));
         int count = 0;
-        for (CmMonitorTarget target : monitorTargetMapper.selectList(lqw)) {
+        List<CmMonitorTarget> dueTargets = LoginHelper.isLogin()
+            ? monitorTargetMapper.selectScopedList(lqw)
+            : monitorTargetMapper.selectList(lqw);
+        for (CmMonitorTarget target : dueTargets) {
             collectTargetNow(target.getTargetId(), triggerSource);
             count++;
         }
@@ -183,9 +186,12 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
 
     @Override
     public MonitorCreateResultVo collectTargetNow(Long targetId, String triggerSource) {
-        CmMonitorTarget target = monitorTargetMapper.selectById(targetId);
+        CmMonitorTarget target = LoginHelper.isLogin()
+            ? monitorTargetMapper.selectScopedOne(
+                Wrappers.<CmMonitorTarget>lambdaQuery().eq(CmMonitorTarget::getTargetId, targetId))
+            : monitorTargetMapper.selectById(targetId);
         if (target == null) {
-            throw new ServiceException("monitor target not found.");
+            throw new ServiceException("monitor target not found or access denied.");
         }
         CmCreatorAccount creator = creatorAccountMapper.selectById(target.getCreatorId());
         if (creator == null) {
@@ -224,11 +230,16 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
 
     @Override
     public MonitorCreateResultVo collectCreatorProfileNow(Long creatorId, String triggerSource) {
+        CmMonitorTarget target = LoginHelper.isLogin()
+            ? findScopedCreatorTarget(creatorId)
+            : findCreatorTarget(creatorId);
+        if (LoginHelper.isLogin() && target == null) {
+            throw new ServiceException("creator not found or access denied.");
+        }
         CmCreatorAccount creator = creatorAccountMapper.selectById(creatorId);
         if (creator == null) {
             throw new ServiceException("creator not found.");
         }
-        CmMonitorTarget target = findCreatorTarget(creatorId);
         CmCollectionRun run = startRun(
             "creator_profile_collect",
             defaultText(triggerSource, "manual_profile"),
@@ -843,14 +854,36 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         lqw.eq(CmMonitorTarget::getCreatorId, creatorId);
         lqw.eq(CmMonitorTarget::getTargetType, TARGET_CREATOR_COLLECTION);
         lqw.eq(CmMonitorTarget::getStatus, "active");
+        lqw.last("limit 1");
         return monitorTargetMapper.selectOne(lqw);
     }
 
-    private CmMonitorTarget findSingleContentTarget(Long contentId) {
+    private CmMonitorTarget findOwnedCreatorTarget(Long creatorId) {
+        LambdaQueryWrapper<CmMonitorTarget> lqw = Wrappers.lambdaQuery();
+        lqw.eq(CmMonitorTarget::getCreatorId, creatorId);
+        lqw.eq(CmMonitorTarget::getTargetType, TARGET_CREATOR_COLLECTION);
+        lqw.eq(CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId());
+        lqw.eq(CmMonitorTarget::getStatus, "active");
+        lqw.last("limit 1");
+        return monitorTargetMapper.selectOne(lqw);
+    }
+
+    private CmMonitorTarget findScopedCreatorTarget(Long creatorId) {
+        LambdaQueryWrapper<CmMonitorTarget> lqw = Wrappers.lambdaQuery();
+        lqw.eq(CmMonitorTarget::getCreatorId, creatorId);
+        lqw.eq(CmMonitorTarget::getTargetType, TARGET_CREATOR_COLLECTION);
+        lqw.eq(CmMonitorTarget::getStatus, "active");
+        lqw.last("limit 1");
+        return monitorTargetMapper.selectScopedOne(lqw);
+    }
+
+    private CmMonitorTarget findOwnedSingleContentTarget(Long contentId) {
         LambdaQueryWrapper<CmMonitorTarget> lqw = Wrappers.lambdaQuery();
         lqw.eq(CmMonitorTarget::getContentId, contentId);
         lqw.eq(CmMonitorTarget::getTargetType, TARGET_SINGLE_CONTENT);
+        lqw.eq(CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId());
         lqw.eq(CmMonitorTarget::getStatus, "active");
+        lqw.last("limit 1");
         return monitorTargetMapper.selectOne(lqw);
     }
 
@@ -870,9 +903,12 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
     }
 
     private void applyOwner(CmMonitorTarget target, Long ownerUserId, Long ownerDeptId, Long superiorUserId) {
-        target.setOwnerUserId(defaultLong(ownerUserId, LoginHelper.getUserId()));
-        target.setOwnerDeptId(defaultLong(ownerDeptId, LoginHelper.getDeptId()));
-        target.setDirectSuperiorUserId(superiorUserId);
+        Long resolvedOwnerUserId = LoginHelper.isLogin() ? LoginHelper.getUserId() : ownerUserId;
+        Long resolvedOwnerDeptId = LoginHelper.isLogin() ? LoginHelper.getDeptId() : ownerDeptId;
+        target.setOwnerUserId(defaultLong(resolvedOwnerUserId, LoginHelper.getUserId()));
+        target.setOwnerDeptId(defaultLong(resolvedOwnerDeptId, LoginHelper.getDeptId()));
+        Long deptLeader = target.getOwnerDeptId() == null ? null : deptService.selectDeptLeaderById(target.getOwnerDeptId());
+        target.setDirectSuperiorUserId(defaultLong(deptLeader, superiorUserId));
     }
 
     private MonitorCreateResultVo result(CmCreatorAccount creator, CmContentPost content, CmMonitorTarget target, CmCollectionRun run,

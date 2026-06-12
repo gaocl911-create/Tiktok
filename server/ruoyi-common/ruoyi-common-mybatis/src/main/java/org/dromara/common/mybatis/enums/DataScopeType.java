@@ -48,12 +48,13 @@ public enum DataScopeType {
     /**
      * 仅本人数据权限
      */
-    SELF("5", " #{#userName} = #{#user.userId} ", " 1 = 0 "),
+    SELF("5", " #{#userName} = #{#user.userId} OR #{#superiorName} = #{#user.userId} ", " 1 = 0 "),
 
     /**
      * 部门及以下或本人数据权限
      */
-    DEPT_AND_CHILD_OR_SELF("6", " #{#deptName} IN ( #{@sdss.getDeptAndChild( #user.deptId )} ) OR #{#userName} = #{#user.userId} ", " 1 = 0 ");
+    DEPT_AND_CHILD_OR_SELF("6", " #{#deptName} IN ( #{@sdss.getDeptAndChild( #user.deptId )} )"
+        + " OR #{#userName} = #{#user.userId} OR #{#superiorName} = #{#user.userId} ", " 1 = 0 ");
 
     private final String code;
 

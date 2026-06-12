@@ -101,13 +101,7 @@ public class CreatorAlertServiceImpl implements ICreatorAlertService {
 
     @Override
     public TableDataInfo<CmAlertEvent> queryEventPage(CmAlertEvent query, PageQuery pageQuery) {
-        LambdaQueryWrapper<CmAlertEvent> lqw = Wrappers.lambdaQuery();
-        lqw.eq(query.getStatus() != null, CmAlertEvent::getStatus, query.getStatus());
-        lqw.eq(query.getSeverity() != null, CmAlertEvent::getSeverity, query.getSeverity());
-        lqw.eq(query.getMetricType() != null, CmAlertEvent::getMetricType, query.getMetricType());
-        lqw.eq(query.getContentId() != null, CmAlertEvent::getContentId, query.getContentId());
-        lqw.orderByDesc(CmAlertEvent::getLastTriggeredAt);
-        return TableDataInfo.build(alertEventMapper.selectPage(pageQuery.build(), lqw));
+        return TableDataInfo.build(alertEventMapper.selectScopedPage(pageQuery.build(), query));
     }
 
     @Override
@@ -116,9 +110,9 @@ public class CreatorAlertServiceImpl implements ICreatorAlertService {
         if (!EVENT_STATUSES.contains(bo.getStatus())) {
             throw new ServiceException("unsupported alert event status.");
         }
-        CmAlertEvent event = alertEventMapper.selectById(eventId);
+        CmAlertEvent event = alertEventMapper.selectScopedById(eventId);
         if (event == null) {
-            throw new ServiceException("alert event not found.");
+            throw new ServiceException("alert event not found or access denied.");
         }
         event.setStatus(bo.getStatus());
         event.setHandleNote(bo.getHandleNote());

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.creator.mapper.CmAlertEventMapper">
+    <sql id="scopedEventFrom">
+        FROM cm_alert_event ae
+        INNER JOIN cm_monitor_target mt
+            ON mt.target_id = ae.target_id
+            AND mt.status = 'active'
+            AND mt.del_flag = '0'
+    </sql>
+
+    <select id="selectScopedPage" resultType="org.dromara.creator.domain.CmAlertEvent">
+        SELECT ae.*
+        <include refid="scopedEventFrom"/>
+        <where>
+            <if test="query.status != null and query.status != ''">
+                ae.status = #{query.status}
+            </if>
+            <if test="query.severity != null and query.severity != ''">
+                AND ae.severity = #{query.severity}
+            </if>
+            <if test="query.metricType != null and query.metricType != ''">
+                AND ae.metric_type = #{query.metricType}
+            </if>
+            <if test="query.contentId != null">
+                AND ae.content_id = #{query.contentId}
+            </if>
+        </where>
+        ORDER BY ae.last_triggered_at DESC
+    </select>
+
+    <select id="selectScopedById" resultType="org.dromara.creator.domain.CmAlertEvent">
+        SELECT ae.*
+        <include refid="scopedEventFrom"/>
+        WHERE ae.event_id = #{eventId}
+        LIMIT 1
+    </select>
+</mapper>
