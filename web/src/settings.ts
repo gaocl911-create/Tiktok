@@ -7,7 +7,7 @@ const setting: DefaultSettings = {
    */
   title: import.meta.env.VITE_APP_TITLE,
 
-  theme: '#409EFF',
+  theme: '#111111',
 
   /**
    * 侧边栏主题 深色主题theme-dark，浅色主题theme-light
@@ -16,7 +16,7 @@ const setting: DefaultSettings = {
   /**
    * 是否系统布局配置
    */
-  showSettings: true,
+  showSettings: false,
 
   /**
    * 默认布局
@@ -26,7 +26,7 @@ const setting: DefaultSettings = {
   /**
    * 是否显示 tagsView
    */
-  tagsView: true,
+  tagsView: false,
 
   /**
    * 显示页签图标
@@ -76,6 +76,6 @@ const setting: DefaultSettings = {
   /**
    * 页面圆角大小
    */
-  radiusBase: 8
+  radiusBase: 6
 };
 export default setting;

@@ -47,24 +47,15 @@
             </el-popover>
           </div>
         </el-tooltip>
-        <el-tooltip content="Github" effect="dark" placement="bottom">
-          <ruo-yi-git id="ruoyi-git" class="right-menu-item hover-effect" />
+        <el-tooltip v-if="canViewCreatorAlerts" content="作品预警" effect="dark" placement="bottom">
+          <el-badge :value="pendingAlertCount || ''" :max="99">
+            <button class="right-menu-item hover-effect alert-button" type="button" aria-label="打开作品预警中心" @click="openAlertCenter">
+              <el-icon><Bell /></el-icon>
+            </button>
+          </el-badge>
         </el-tooltip>
-
-        <el-tooltip :content="proxy.$t('navbar.document')" effect="dark" placement="bottom">
-          <ruo-yi-doc id="ruoyi-doc" class="right-menu-item hover-effect" />
-        </el-tooltip>
-
         <el-tooltip :content="proxy.$t('navbar.full')" effect="dark" placement="bottom">
           <screenfull id="screenfull" class="right-menu-item hover-effect" />
-        </el-tooltip>
-
-        <el-tooltip :content="proxy.$t('navbar.language')" effect="dark" placement="bottom">
-          <lang-select id="lang-select" class="right-menu-item hover-effect" />
-        </el-tooltip>
-
-        <el-tooltip :content="proxy.$t('navbar.layoutSize')" effect="dark" placement="bottom">
-          <size-select id="size-select" class="right-menu-item hover-effect" />
         </el-tooltip>
       </template>
       <div class="avatar-container">
@@ -106,19 +97,26 @@ import router from '@/router';
 import { ElMessageBoxOptions } from 'element-plus/es/components/message-box/src/message-box.type';
 import { NavTypeEnum } from '@/enums/NavTypeEnum';
 import Logo from "@/layout/components/Sidebar/Logo.vue";
-import TopBar from './TopBar'
+import TopBar from './TopBar/index.vue';
+import { Bell } from '@element-plus/icons-vue';
+import { listAlertEvents } from '@/api/creator';
 
 const appStore = useAppStore();
 const userStore = useUserStore();
 const settingsStore = useSettingsStore();
 const noticeStore = storeToRefs(useNoticeStore());
 const newNotice = ref(<number>0);
+const pendingAlertCount = ref(0);
+let alertTimer: ReturnType<typeof setInterval> | undefined;
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 
 const userId = ref(userStore.userId);
 const navType = computed(() => settingsStore.navType);
 const showLogo = computed(() => settingsStore.sidebarLogo);
+const canViewCreatorAlerts = computed(() =>
+  userStore.permissions.includes('*:*:*') || userStore.permissions.includes('creator:alert:list')
+);
 
 const companyName = ref(undefined);
 const tenantList = ref<TenantVO[]>([]);
@@ -131,6 +129,30 @@ const searchMenuRef = ref<InstanceType<typeof SearchMenu>>();
 
 const openSearchMenu = () => {
   searchMenuRef.value?.openSearch();
+};
+
+const openAlertCenter = () => {
+  router.push('/douyin/alerts');
+};
+
+const refreshPendingAlerts = async () => {
+  if (!canViewCreatorAlerts.value) return;
+  try {
+    const res = await listAlertEvents({ pageNum: 1, pageSize: 1, status: 'pending' });
+    const nextCount = Number(res.total || 0);
+    if (nextCount > pendingAlertCount.value && pendingAlertCount.value > 0) {
+      ElNotification({
+        title: '发现新的作品预警',
+        message: `当前有 ${nextCount} 条预警等待处理`,
+        type: 'warning',
+        duration: 6000,
+        onClick: openAlertCenter
+      });
+    }
+    pendingAlertCount.value = nextCount;
+  } catch {
+    // Navigation reminders should not interrupt normal page operations.
+  }
 };
 
 // 动态切换
@@ -209,6 +231,15 @@ watch(
   },
   { deep: true }
 );
+
+onMounted(() => {
+  refreshPendingAlerts();
+  alertTimer = setInterval(refreshPendingAlerts, 60_000);
+});
+
+onBeforeUnmount(() => {
+  if (alertTimer) clearInterval(alertTimer);
+});
 </script>
 
 <style lang="scss" scoped>
@@ -232,6 +263,11 @@ watch(
 
 .align-center {
   align-items: center;
+}
+
+.alert-button {
+  border: 0;
+  background: transparent;
 }
 
 .navbar {
@@ -320,7 +356,7 @@ watch(
     }
 
     .avatar-container {
-      margin-right: 40px;
+      margin-right: 22px;
 
       .avatar-wrapper {
         margin-top: 0;

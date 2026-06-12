@@ -88,6 +88,40 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/douyin/account/detail',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: ':creatorId',
+        component: () => import('@/views/creator/account/detail.vue'),
+        name: 'CreatorAccountDetail',
+        meta: {
+          title: '作者详情',
+          activeMenu: '/douyin/account',
+          permissions: ['creator:account:query']
+        }
+      }
+    ]
+  },
+  {
+    path: '/douyin/content/detail',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: ':contentId',
+        component: () => import('@/views/creator/content/detail.vue'),
+        name: 'CreatorContentDetail',
+        meta: {
+          title: '作品监控详情',
+          activeMenu: '/douyin/content',
+          permissions: ['creator:content:query']
+        }
+      }
+    ]
   }
 ];
 

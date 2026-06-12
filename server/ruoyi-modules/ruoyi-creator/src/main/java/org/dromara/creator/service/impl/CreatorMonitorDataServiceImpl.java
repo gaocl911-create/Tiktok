@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
+import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.creator.domain.*;
 import org.dromara.creator.mapper.*;
 import org.dromara.creator.service.ICreatorMonitorDataService;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Data service for creator monitor core tables.
@@ -67,6 +69,34 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
     }
 
     @Override
+    public CmMonitorTarget queryTargetByContentId(Long contentId) {
+        LambdaQueryWrapper<CmMonitorTarget> directTargetQuery = Wrappers.lambdaQuery();
+        directTargetQuery.eq(CmMonitorTarget::getContentId, contentId);
+        directTargetQuery.eq(CmMonitorTarget::getStatus, "active");
+        directTargetQuery.eq(!canViewAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId());
+        directTargetQuery.last("limit 1");
+        CmMonitorTarget directTarget = monitorTargetMapper.selectOne(directTargetQuery);
+        if (directTarget != null) {
+            return directTarget;
+        }
+
+        LambdaQueryWrapper<CmMonitorTargetContent> relationQuery = Wrappers.lambdaQuery();
+        relationQuery.eq(CmMonitorTargetContent::getContentId, contentId);
+        relationQuery.eq(CmMonitorTargetContent::getStatus, "active");
+        relationQuery.orderByDesc(CmMonitorTargetContent::getFirstBoundAt);
+        relationQuery.last("limit 50");
+        for (CmMonitorTargetContent relation : targetContentMapper.selectList(relationQuery)) {
+            CmMonitorTarget target = monitorTargetMapper.selectById(relation.getTargetId());
+            if (target != null
+                && "active".equals(target.getStatus())
+                && (canViewAllTargets() || Objects.equals(target.getOwnerUserId(), LoginHelper.getUserId()))) {
+                return target;
+            }
+        }
+        return null;
+    }
+
+    @Override
     public TableDataInfo<CmCreatorAccount> queryCreatorPage(CmCreatorAccount query, PageQuery pageQuery) {
         LambdaQueryWrapper<CmCreatorAccount> lqw = Wrappers.lambdaQuery();
         lqw.eq(StringUtils.isNotBlank(query.getTenantId()), CmCreatorAccount::getTenantId, query.getTenantId());
@@ -74,6 +104,19 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
         lqw.eq(StringUtils.isNotBlank(query.getPlatformCreatorId()), CmCreatorAccount::getPlatformCreatorId, query.getPlatformCreatorId());
         lqw.like(StringUtils.isNotBlank(query.getNickname()), CmCreatorAccount::getNickname, query.getNickname());
         lqw.eq(StringUtils.isNotBlank(query.getProfileStatus()), CmCreatorAccount::getProfileStatus, query.getProfileStatus());
+        if (canViewAllTargets()) {
+            lqw.exists("SELECT 1 FROM cm_monitor_target mt"
+                + " WHERE mt.creator_id = cm_creator_account.creator_id"
+                + " AND mt.target_type = 'creator_collection'"
+                + " AND mt.status = 'active' AND mt.del_flag = '0'");
+        } else {
+            lqw.exists("SELECT 1 FROM cm_monitor_target mt"
+                    + " WHERE mt.creator_id = cm_creator_account.creator_id"
+                    + " AND mt.target_type = 'creator_collection'"
+                    + " AND mt.status = 'active' AND mt.del_flag = '0'"
+                    + " AND mt.owner_user_id = {0}",
+                LoginHelper.getUserId());
+        }
         lqw.orderByDesc(CmCreatorAccount::getUpdateTime);
         Page<CmCreatorAccount> page = creatorAccountMapper.selectPage(pageQuery.build(), lqw);
         return TableDataInfo.build(page);
@@ -92,6 +135,21 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
             .like(CmContentPost::getTitle, query.getTitle())
             .or()
             .like(CmContentPost::getDescription, query.getTitle()));
+        if (canViewAllTargets()) {
+            lqw.exists("SELECT 1 FROM cm_monitor_target_content mtc"
+                + " INNER JOIN cm_monitor_target mt ON mt.target_id = mtc.target_id"
+                + " WHERE mtc.content_id = cm_content_post.content_id"
+                + " AND mtc.status = 'active' AND mtc.del_flag = '0'"
+                + " AND mt.status = 'active' AND mt.del_flag = '0'");
+        } else {
+            lqw.exists("SELECT 1 FROM cm_monitor_target_content mtc"
+                    + " INNER JOIN cm_monitor_target mt ON mt.target_id = mtc.target_id"
+                    + " WHERE mtc.content_id = cm_content_post.content_id"
+                    + " AND mtc.status = 'active' AND mtc.del_flag = '0'"
+                    + " AND mt.status = 'active' AND mt.del_flag = '0'"
+                    + " AND mt.owner_user_id = {0}",
+                LoginHelper.getUserId());
+        }
         lqw.orderByDesc(CmContentPost::getPublishTime, CmContentPost::getFirstSeenAt);
         Page<CmContentPost> page = contentPostMapper.selectPage(pageQuery.build(), lqw);
         return TableDataInfo.build(page);
@@ -115,12 +173,16 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
         return TableDataInfo.build(page);
     }
 
+    private boolean canViewAllTargets() {
+        return LoginHelper.isSuperAdmin() || LoginHelper.isTenantAdmin();
+    }
+
     @Override
     public List<CmContentSnapshot> queryRecentContentSnapshots(Long contentId, int limit) {
         LambdaQueryWrapper<CmContentSnapshot> lqw = Wrappers.lambdaQuery();
         lqw.eq(CmContentSnapshot::getContentId, contentId);
         lqw.orderByDesc(CmContentSnapshot::getCollectedAt);
-        lqw.last(limit > 0, "limit " + limit);
+        lqw.last("limit " + normalizedLimit(limit, 30, 1000));
         return contentSnapshotMapper.selectList(lqw);
     }
 
@@ -129,7 +191,16 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
         LambdaQueryWrapper<CmCollectionRun> lqw = Wrappers.lambdaQuery();
         lqw.eq(targetId != null, CmCollectionRun::getTargetId, targetId);
         lqw.orderByDesc(CmCollectionRun::getStartedAt);
-        lqw.last(limit > 0, "limit " + limit);
+        lqw.last("limit " + normalizedLimit(limit, 30, 500));
+        return collectionRunMapper.selectList(lqw);
+    }
+
+    @Override
+    public List<CmCollectionRun> queryRecentContentRuns(Long contentId, int limit) {
+        LambdaQueryWrapper<CmCollectionRun> lqw = Wrappers.lambdaQuery();
+        lqw.eq(CmCollectionRun::getContentId, contentId);
+        lqw.orderByDesc(CmCollectionRun::getStartedAt);
+        lqw.last("limit " + normalizedLimit(limit, 30, 500));
         return collectionRunMapper.selectList(lqw);
     }
 
@@ -203,5 +274,12 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
     @Transactional(rollbackFor = Exception.class)
     public Boolean deleteTargetsByIds(Collection<Long> targetIds) {
         return monitorTargetMapper.deleteByIds(targetIds) > 0;
+    }
+
+    private int normalizedLimit(int limit, int defaultLimit, int maxLimit) {
+        if (limit <= 0) {
+            return defaultLimit;
+        }
+        return Math.min(limit, maxLimit);
     }
 }

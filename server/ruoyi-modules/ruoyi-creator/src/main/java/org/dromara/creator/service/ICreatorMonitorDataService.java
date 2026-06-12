@@ -22,6 +22,8 @@ public interface ICreatorMonitorDataService {
 
     CmMonitorTarget queryTargetById(Long targetId);
 
+    CmMonitorTarget queryTargetByContentId(Long contentId);
+
     TableDataInfo<CmCreatorAccount> queryCreatorPage(CmCreatorAccount query, PageQuery pageQuery);
 
     TableDataInfo<CmContentPost> queryContentPage(CmContentPost query, PageQuery pageQuery);
@@ -31,6 +33,8 @@ public interface ICreatorMonitorDataService {
     List<CmContentSnapshot> queryRecentContentSnapshots(Long contentId, int limit);
 
     List<CmCollectionRun> queryRecentCollectionRuns(Long targetId, int limit);
+
+    List<CmCollectionRun> queryRecentContentRuns(Long contentId, int limit);
 
     List<CmMonitorTarget> queryActiveTargetsDueForMetrics(String tenantId, int limit);
 

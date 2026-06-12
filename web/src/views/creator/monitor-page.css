@@ -1,0 +1,153 @@
+.monitor-page {
+  min-height: 100%;
+  padding: 24px;
+  color: #171717;
+  background: #f5f5f4;
+}
+
+.page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.page-heading h1 {
+  margin: 5px 0 3px;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 650;
+}
+
+.page-heading p,
+.filter-hint {
+  margin: 0;
+  color: #737373;
+  font-size: 13px;
+}
+
+.heading-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.surface {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+}
+
+.filter-bar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 180px auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.table-surface {
+  padding: 0 14px 14px;
+}
+
+.account-cell,
+.content-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.account-cell div,
+.content-cell div:last-child {
+  min-width: 0;
+}
+
+.account-cell strong,
+.account-cell span,
+.content-cell strong,
+.content-cell span {
+  display: block;
+}
+
+.account-cell strong,
+.content-cell strong {
+  color: #171717;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-cell span,
+.content-cell span {
+  margin-top: 3px;
+  color: #737373;
+  font-size: 12px;
+}
+
+.cover {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+  color: #737373;
+  background: #f0f0ef;
+}
+
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.empty-surface {
+  min-height: 440px;
+  display: grid;
+  place-items: center;
+}
+
+.empty-surface p {
+  max-width: 520px;
+  margin: 8px auto 0;
+  color: #737373;
+  font-size: 13px;
+}
+
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dedede;
+  border-radius: 50%;
+  color: #525252;
+  font-size: 26px;
+  background: #fafafa;
+}
+
+@media (max-width: 900px) {
+  .monitor-page {
+    padding: 16px;
+  }
+
+  .page-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filter-bar,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

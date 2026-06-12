@@ -281,3 +281,5 @@ create table cm_api_call_log
     key idx_cm_api_time (tenant_id, called_at),
     key idx_cm_api_endpoint (tenant_id, provider, endpoint, called_at)
 ) engine=innodb comment='creator monitor - external api call log';
+
+-- Alert rules and generated events are installed by creator_alert_migration.sql.

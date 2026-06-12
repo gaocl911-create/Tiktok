@@ -26,6 +26,43 @@ body {
     sans-serif;
 }
 
+.el-button--primary {
+  --el-button-bg-color: #111111;
+  --el-button-border-color: #111111;
+  --el-button-hover-bg-color: #303030;
+  --el-button-hover-border-color: #303030;
+  --el-button-active-bg-color: #000000;
+  --el-button-active-border-color: #000000;
+}
+
+.el-table {
+  --el-table-header-bg-color: #fafafa;
+  --el-table-header-text-color: #525252;
+  --el-table-border-color: #ececec;
+  --el-table-row-hover-bg-color: #fafafa;
+}
+
+.el-dialog {
+  border-radius: 6px;
+}
+
+#app .sidebar-container .el-menu-item.is-active,
+#app .sidebar-container .el-sub-menu.is-active > .el-sub-menu__title {
+  position: relative;
+  color: #fff !important;
+  background: #202020 !important;
+}
+
+#app .sidebar-container .el-menu-item.is-active::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 0;
+  width: 2px;
+  background: #fff;
+}
+
 label {
   font-weight: 600;
 }
@@ -162,12 +199,12 @@ aside {
   border: 1px solid var(--el-border-color-lighter);
   padding: 16px;
   background: var(--app-surface-bg);
-  box-shadow: var(--app-shadow-sm);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: none;
+  transition: border-color 0.2s ease;
 
   &:hover {
-    box-shadow: var(--app-shadow-md);
-    border-color: var(--el-border-color-light);
+    box-shadow: none;
+    border-color: var(--el-border-color);
   }
 }
 

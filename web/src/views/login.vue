@@ -1,9 +1,25 @@
 <template>
   <div class="login">
+    <section class="login-brand">
+      <div class="login-brand-mark">CM</div>
+      <div class="login-brand-title">
+        <h1>创作者监测</h1>
+        <p>Creator Monitoring</p>
+      </div>
+      <div class="login-brand-copy">
+        <strong>专注作品数据变化</strong>
+        <span>持续监控账号动态、作品互动指标和采集运行状态。</span>
+      </div>
+      <div class="login-signal" aria-hidden="true">
+        <i v-for="height in signalBars" :key="height" :style="{ height: `${height}%` }" />
+      </div>
+    </section>
     <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="login-form">
       <div class="title-box">
-        <h3 class="title">{{ title }}</h3>
-        <lang-select />
+        <div>
+          <span>WELCOME BACK</span>
+          <h3 class="title">登录{{ title }}</h3>
+        </div>
       </div>
       <el-form-item v-if="tenantEnabled" prop="tenantId">
         <el-select v-model="loginForm.tenantId" filterable :placeholder="proxy.$t('login.selectPlaceholder')" style="width: 100%">
@@ -44,23 +60,6 @@
         </div>
       </el-form-item>
       <el-checkbox v-model="loginForm.rememberMe" style="margin: 0 0 25px 0">{{ proxy.$t('login.rememberPassword') }}</el-checkbox>
-      <el-form-item style="float: right">
-        <el-button circle :title="proxy.$t('login.social.wechat')" @click="doSocialLogin('wechat')">
-          <svg-icon icon-class="wechat" />
-        </el-button>
-        <el-button circle :title="proxy.$t('login.social.maxkey')" @click="doSocialLogin('maxkey')">
-          <svg-icon icon-class="maxkey" />
-        </el-button>
-        <el-button circle :title="proxy.$t('login.social.topiam')" @click="doSocialLogin('topiam')">
-          <svg-icon icon-class="topiam" />
-        </el-button>
-        <el-button circle :title="proxy.$t('login.social.gitee')" @click="doSocialLogin('gitee')">
-          <svg-icon icon-class="gitee" />
-        </el-button>
-        <el-button circle :title="proxy.$t('login.social.github')" @click="doSocialLogin('github')">
-          <svg-icon icon-class="github" />
-        </el-button>
-      </el-form-item>
       <el-form-item style="width: 100%">
         <el-button :loading="loading" size="large" type="primary" style="width: 100%" @click.prevent="handleLogin">
           <span v-if="!loading">{{ proxy.$t('login.login') }}</span>
@@ -73,7 +72,7 @@
     </el-form>
     <!--  底部  -->
     <div class="el-login-footer">
-      <span>Copyright © 2018-2026 疯狂的狮子Li All Rights Reserved.</span>
+      <span>Creator Monitoring System</span>
     </div>
   </div>
 </template>
@@ -96,12 +95,14 @@ const { t } = useI18n();
 
 const loginForm = ref<LoginData>({
   tenantId: '000000',
-  username: 'admin',
-  password: 'admin123',
+  username: '',
+  password: '',
   rememberMe: false,
   code: '',
   uuid: ''
 } as LoginData);
+
+const signalBars = [24, 32, 28, 46, 40, 58, 54, 72, 63, 82, 74, 92, 86, 100];
 
 const loginRules: ElFormRules = {
   tenantId: [{ required: true, trigger: 'blur', message: t('login.rule.tenantId.required') }],
@@ -373,6 +374,158 @@ onMounted(() => {
 
   .el-login-footer {
     color: rgba(226, 232, 240, 0.65);
+  }
+}
+
+.login {
+  justify-content: flex-end;
+  padding: 40px 9vw;
+  background: #f5f5f4;
+}
+
+.login-brand {
+  position: absolute;
+  inset: 0 50% 0 0;
+  overflow: hidden;
+  padding: 54px;
+  color: #fff;
+  background: #111;
+}
+
+.login-brand-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  color: #111;
+  background: #fff;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.login-brand-title {
+  position: absolute;
+  top: 56px;
+  left: 108px;
+}
+
+.login-brand h1,
+.login-brand p {
+  margin: 0;
+}
+
+.login-brand h1 {
+  font-size: 20px;
+}
+
+.login-brand p {
+  margin-top: 2px;
+  color: #737373;
+  font-size: 11px;
+}
+
+.login-brand-copy {
+  position: absolute;
+  left: 54px;
+  bottom: 30%;
+  max-width: 460px;
+}
+
+.login-brand-copy strong,
+.login-brand-copy span {
+  display: block;
+}
+
+.login-brand-copy strong {
+  font-size: 32px;
+  line-height: 42px;
+  font-weight: 650;
+}
+
+.login-brand-copy span {
+  margin-top: 12px;
+  color: #a3a3a3;
+  font-size: 14px;
+  line-height: 24px;
+}
+
+.login-signal {
+  position: absolute;
+  right: 54px;
+  bottom: 54px;
+  left: 54px;
+  height: 90px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  opacity: 0.38;
+}
+
+.login-signal i {
+  flex: 1;
+  min-height: 4px;
+  background: #fff;
+}
+
+.login-form {
+  width: min(420px, 42vw);
+  padding: 36px 34px 20px;
+  border: 1px solid #dedede;
+  border-radius: 6px;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.title-box {
+  margin-bottom: 28px;
+}
+
+.title-box > div {
+  width: 100%;
+}
+
+.title-box span {
+  color: #8a8a8a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.title-box .title {
+  margin: 6px 0 0;
+  text-align: left;
+  font-size: 24px;
+}
+
+.login-form :deep(.el-button--primary) {
+  height: 42px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.el-login-footer {
+  right: 0;
+  width: 50%;
+  color: #a3a3a3;
+  letter-spacing: 0;
+}
+
+@media (max-width: 900px) {
+  .login {
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .login-brand {
+    display: none;
+  }
+
+  .login-form {
+    width: min(420px, 100%);
+  }
+
+  .el-login-footer {
+    width: 100%;
   }
 }
 </style>
