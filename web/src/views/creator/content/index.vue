@@ -177,7 +177,12 @@ const rules: ElFormRules = {
 
 const formatNumber = (value?: number) => (value == null ? '--' : new Intl.NumberFormat('zh-CN').format(value));
 const formatTime = (value?: string) => (value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '尚未采集');
-const titleText = (row: ContentPost) => row.title || row.description?.split('\n')[0] || '未命名作品';
+const titleText = (row: ContentPost) => {
+  if (/^Douyin content \d+$/.test(row.title || '')) {
+    return '暂无作品文案';
+  }
+  return row.title || row.description?.split('\n')[0] || '暂无作品文案';
+};
 const descriptionText = (row: ContentPost) => {
   const value = row.description || '';
   if (!value || value === row.title) {

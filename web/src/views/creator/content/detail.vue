@@ -65,12 +65,14 @@
             <h2>互动趋势</h2>
             <p>曲线从作品加入监控并产生首个快照后开始计算。</p>
           </div>
-          <el-radio-group v-model="range" size="small">
-            <el-radio-button value="24h">24小时</el-radio-button>
-            <el-radio-button value="7d">7天</el-radio-button>
-            <el-radio-button value="30d">30天</el-radio-button>
-            <el-radio-button value="all">全部</el-radio-button>
-          </el-radio-group>
+          <div class="range-control">
+            <el-radio-group v-model="range" size="small">
+              <el-radio-button v-for="option in rangeOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </el-radio-button>
+            </el-radio-group>
+            <span>{{ rangeSummary }}</span>
+          </div>
         </div>
 
         <div v-if="filteredSnapshots.length" class="chart-grid">
@@ -193,7 +195,14 @@ const snapshots = ref<ContentSnapshot[]>([]);
 const runs = ref<CollectionRun[]>([]);
 const loading = ref(false);
 const refreshing = ref(false);
-const range = ref<'24h' | '7d' | '30d' | 'all'>('7d');
+type RangeValue = '24h' | '7d' | '30d' | 'all';
+const rangeOptions: Array<{ value: RangeValue; label: string; duration?: number }> = [
+  { value: '24h', label: '24小时', duration: 24 * 60 * 60 * 1000 },
+  { value: '7d', label: '7天', duration: 7 * 24 * 60 * 60 * 1000 },
+  { value: '30d', label: '30天', duration: 30 * 24 * 60 * 60 * 1000 },
+  { value: 'all', label: '全部' }
+];
+const range = ref<RangeValue>('24h');
 const activeHistoryTab = ref('snapshots');
 const snapshotPage = ref(1);
 const snapshotPageSize = ref(10);
@@ -203,19 +212,38 @@ let totalChart: echarts.ECharts | undefined;
 let deltaChart: echarts.ECharts | undefined;
 let resizeObserver: ResizeObserver | undefined;
 
-const contentTitle = computed(() => content.value?.title || content.value?.description?.split('\n')[0] || '未命名作品');
+const contentTitle = computed(() => {
+  if (/^Douyin content \d+$/.test(content.value?.title || '')) return '暂无作品文案';
+  return content.value?.title || content.value?.description?.split('\n')[0] || '暂无作品文案';
+});
 const sortedSnapshots = computed(() =>
   [...snapshots.value].sort((a, b) => new Date(a.collectedAt).getTime() - new Date(b.collectedAt).getTime())
 );
+const rangeWindow = computed(() => {
+  const option = rangeOptions.find((item) => item.value === range.value);
+  if (!option?.duration) {
+    return {
+      start: sortedSnapshots.value[0] ? new Date(sortedSnapshots.value[0].collectedAt).getTime() : undefined,
+      end: sortedSnapshots.value.at(-1) ? new Date(sortedSnapshots.value.at(-1)!.collectedAt).getTime() : undefined
+    };
+  }
+  const end = Date.now();
+  return { start: end - option.duration, end };
+});
 const filteredSnapshots = computed(() => {
   if (range.value === 'all') return sortedSnapshots.value;
-  const rangeMs = {
-    '24h': 24 * 60 * 60 * 1000,
-    '7d': 7 * 24 * 60 * 60 * 1000,
-    '30d': 30 * 24 * 60 * 60 * 1000
-  }[range.value];
-  const start = Date.now() - rangeMs;
-  return sortedSnapshots.value.filter((item) => new Date(item.collectedAt).getTime() >= start);
+  return sortedSnapshots.value.filter((item) => {
+    const collectedAt = new Date(item.collectedAt).getTime();
+    return collectedAt >= rangeWindow.value.start! && collectedAt <= rangeWindow.value.end!;
+  });
+});
+const rangeSummary = computed(() => {
+  const option = rangeOptions.find((item) => item.value === range.value);
+  const count = filteredSnapshots.value.length;
+  if (!count) return `${option?.label || ''}内暂无采集数据`;
+  const first = filteredSnapshots.value[0];
+  const last = filteredSnapshots.value.at(-1)!;
+  return `展示 ${count} 条 · ${formatShortTime(first.collectedAt)} 至 ${formatShortTime(last.collectedAt)}`;
 });
 const latestSnapshot = computed(() => sortedSnapshots.value.at(-1));
 const currentMetrics = computed(() => [
@@ -235,6 +263,13 @@ const intervalText = computed(() => target.value?.contentCollectIntervalMin ? `�
 const formatNumber = (value?: number) => value == null ? '--' : new Intl.NumberFormat('zh-CN').format(value);
 const formatDelta = (value?: number) => value == null ? '--' : `${value > 0 ? '+' : ''}${formatNumber(value)}`;
 const formatTime = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '--';
+const formatShortTime = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', {
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false
+}) : '--';
 const durationText = (value?: number) => value == null ? '--' : value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(1)} 秒`;
 const runStatusText = (status?: string) => ({
   running: '运行中',
@@ -284,16 +319,15 @@ const loadData = async () => {
 
 const renderCharts = () => {
   if (!totalChartRef.value || !deltaChartRef.value) return;
-  totalChart ||= echarts.init(totalChartRef.value);
-  deltaChart ||= echarts.init(deltaChartRef.value);
+  if (!totalChart || totalChart.getDom() !== totalChartRef.value) {
+    totalChart?.dispose();
+    totalChart = echarts.init(totalChartRef.value);
+  }
+  if (!deltaChart || deltaChart.getDom() !== deltaChartRef.value) {
+    deltaChart?.dispose();
+    deltaChart = echarts.init(deltaChartRef.value);
+  }
   const rows = filteredSnapshots.value;
-  const labels = rows.map((item) => new Date(item.collectedAt).toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }));
   const seriesConfig = [
     { name: '点赞', total: 'likeCount', delta: 'likeDelta', color: '#171717' },
     { name: '评论', total: 'commentCount', delta: 'commentDelta', color: '#2563eb' },
@@ -307,10 +341,14 @@ const renderCharts = () => {
     legend: { top: 0, right: 0, itemWidth: 14, itemHeight: 8 },
     grid: { left: 20, right: 18, top: 42, bottom: 22, containLabel: true },
     xAxis: {
-      type: 'category',
-      data: labels,
-      boundaryGap: false,
-      axisLabel: { color: '#737373', hideOverlap: true },
+      type: 'time',
+      min: rangeWindow.value.start,
+      max: rangeWindow.value.end,
+      axisLabel: {
+        color: '#737373',
+        hideOverlap: true,
+        formatter: (value: number) => formatShortTime(new Date(value).toISOString())
+      },
       axisLine: { lineStyle: { color: '#e5e5e5' } }
     },
     yAxis: {
@@ -328,7 +366,7 @@ const renderCharts = () => {
       showSymbol: rows.length < 30,
       symbolSize: 6,
       smooth: 0.2,
-      data: rows.map((row) => row[item.total] ?? null)
+      data: rows.map((row) => [new Date(row.collectedAt).getTime(), row[item.total] ?? null])
     }))
   }, true);
   deltaChart.setOption({
@@ -343,7 +381,7 @@ const renderCharts = () => {
       showSymbol: true,
       symbolSize: 5,
       smooth: 0.15,
-      data: rows.map((row) => row[item.delta] ?? null)
+      data: rows.map((row) => [new Date(row.collectedAt).getTime(), row[item.delta] ?? null])
     }))
   }, true);
 };
@@ -571,6 +609,19 @@ onBeforeUnmount(() => {
   margin: 4px 0 0;
   color: #737373;
   font-size: 12px;
+}
+
+.range-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.range-control > span {
+  color: #737373;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .chart-grid {

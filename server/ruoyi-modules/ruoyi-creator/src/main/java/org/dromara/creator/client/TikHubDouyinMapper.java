@@ -11,6 +11,10 @@ import java.util.List;
  */
 public class TikHubDouyinMapper {
 
+    private static final String UNTITLED_CONTENT = "\u6682\u65e0\u4f5c\u54c1\u6587\u6848";
+    private static final String GENERIC_SHARE_DESCRIPTION =
+        "\u5728\u6296\u97f3\uff0c\u8bb0\u5f55\u7f8e\u597d\u751f\u6d3b";
+
     public String mapSecUserId(JsonNode payload) {
         JsonNode data = TikHubJsonSupport.unwrapData(payload);
         String secUserId = TikHubJsonSupport.findText(data, "sec_user_id", "secUid", "sec_uid", "secUserId");
@@ -76,11 +80,15 @@ public class TikHubDouyinMapper {
         JsonNode metricsRoot = statistics == null ? item : statistics;
         TikHubContentProfile profile = new TikHubContentProfile();
         profile.setPlatformContentId(awemeId);
-        String description = directText(item, "desc", "caption", "description", "share_desc");
+        JsonNode shareInfo = item == null ? null : item.get("share_info");
+        String description = firstNotBlank(
+            directText(item, "desc", "caption", "description", "share_desc"),
+            meaningfulShareDescription(directText(shareInfo, "share_desc", "share_desc_info"))
+        );
         profile.setTitle(firstNotBlank(
             directText(item, "item_title", "preview_title", "title", "share_title"),
             firstLine(description),
-            "Douyin content " + awemeId
+            UNTITLED_CONTENT
         ));
         profile.setDescription(description);
         profile.setCoverUrl(resolveCoverUrl(item));
@@ -213,6 +221,17 @@ public class TikHubDouyinMapper {
         }
         int lineBreak = value.indexOf('\n');
         return lineBreak < 0 ? value : value.substring(0, lineBreak).trim();
+    }
+
+    private String meaningfulShareDescription(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (GENERIC_SHARE_DESCRIPTION.equals(normalized)) {
+            return null;
+        }
+        return normalized;
     }
 
     private String firstNotBlank(String... values) {

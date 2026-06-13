@@ -23,4 +23,13 @@ public interface ISysDataScopeService {
      */
     String getDeptAndChild(Long deptId);
 
+    /**
+     * Get the current user and all recursively subordinate user IDs.
+     *
+     * @param userId current user ID
+     * @param tenantId tenant ID
+     * @return comma-separated user IDs
+     */
+    String getSelfAndSubordinateUsers(Long userId, String tenantId);
+
 }

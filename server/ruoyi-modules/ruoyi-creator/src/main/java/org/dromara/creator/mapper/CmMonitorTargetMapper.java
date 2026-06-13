@@ -17,8 +17,7 @@ public interface CmMonitorTargetMapper extends BaseMapperPlus<CmMonitorTarget, C
     @DataPermission({
         @DataColumn(key = "deptName", value = "owner_dept_id"),
         @DataColumn(key = "userName", value = "owner_user_id"),
-        @DataColumn(key = "superiorName", value = "COALESCE(direct_superior_user_id,"
-            + " (SELECT leader FROM sys_dept WHERE dept_id = owner_dept_id))")
+        @DataColumn(key = "subordinateName", value = "owner_user_id")
     })
     default Page<CmMonitorTarget> selectScopedPage(Page<CmMonitorTarget> page, Wrapper<CmMonitorTarget> wrapper) {
         return selectPage(page, wrapper);
@@ -27,8 +26,7 @@ public interface CmMonitorTargetMapper extends BaseMapperPlus<CmMonitorTarget, C
     @DataPermission({
         @DataColumn(key = "deptName", value = "owner_dept_id"),
         @DataColumn(key = "userName", value = "owner_user_id"),
-        @DataColumn(key = "superiorName", value = "COALESCE(direct_superior_user_id,"
-            + " (SELECT leader FROM sys_dept WHERE dept_id = owner_dept_id))")
+        @DataColumn(key = "subordinateName", value = "owner_user_id")
     })
     default List<CmMonitorTarget> selectScopedList(Wrapper<CmMonitorTarget> wrapper) {
         return selectList(wrapper);
@@ -37,8 +35,7 @@ public interface CmMonitorTargetMapper extends BaseMapperPlus<CmMonitorTarget, C
     @DataPermission({
         @DataColumn(key = "deptName", value = "owner_dept_id"),
         @DataColumn(key = "userName", value = "owner_user_id"),
-        @DataColumn(key = "superiorName", value = "COALESCE(direct_superior_user_id,"
-            + " (SELECT leader FROM sys_dept WHERE dept_id = owner_dept_id))")
+        @DataColumn(key = "subordinateName", value = "owner_user_id")
     })
     default CmMonitorTarget selectScopedOne(Wrapper<CmMonitorTarget> wrapper) {
         return selectOne(wrapper);

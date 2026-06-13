@@ -16,6 +16,9 @@ spring.boot.admin.client:
 
 --- # creator monitor external data providers
 creator:
+  monitor:
+    local-scheduler:
+      enabled: ${CREATOR_LOCAL_SCHEDULER_ENABLED:false}
   tikhub:
     enabled: ${TIKHUB_ENABLED:false}
     api-base-url: ${TIKHUB_API_BASE_URL:https://api.tikhub.io}

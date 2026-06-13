@@ -12,8 +12,7 @@ public interface CmAlertEventMapper extends BaseMapperPlus<CmAlertEvent, CmAlert
     @DataPermission({
         @DataColumn(key = "deptName", value = "mt.owner_dept_id"),
         @DataColumn(key = "userName", value = "mt.owner_user_id"),
-        @DataColumn(key = "superiorName", value = "COALESCE(mt.direct_superior_user_id,"
-            + " (SELECT leader FROM sys_dept WHERE dept_id = mt.owner_dept_id))")
+        @DataColumn(key = "subordinateName", value = "mt.owner_user_id")
     })
     Page<CmAlertEvent> selectScopedPage(@Param("page") Page<CmAlertEvent> page,
                                         @Param("query") CmAlertEvent query);
@@ -21,8 +20,7 @@ public interface CmAlertEventMapper extends BaseMapperPlus<CmAlertEvent, CmAlert
     @DataPermission({
         @DataColumn(key = "deptName", value = "mt.owner_dept_id"),
         @DataColumn(key = "userName", value = "mt.owner_user_id"),
-        @DataColumn(key = "superiorName", value = "COALESCE(mt.direct_superior_user_id,"
-            + " (SELECT leader FROM sys_dept WHERE dept_id = mt.owner_dept_id))")
+        @DataColumn(key = "subordinateName", value = "mt.owner_user_id")
     })
     CmAlertEvent selectScopedById(@Param("eventId") Long eventId);
 }

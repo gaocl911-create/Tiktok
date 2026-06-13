@@ -156,7 +156,10 @@ const intervalText = (minutes?: number) => {
   if (minutes % 60 === 0) return `每 ${minutes / 60} 小时`;
   return `每 ${minutes} 分钟`;
 };
-const contentTitle = (row: ContentPost) => row.title || row.description?.split('\n')[0] || '未命名作品';
+const contentTitle = (row: ContentPost) => {
+  if (/^Douyin content \d+$/.test(row.title || '')) return '暂无作品文案';
+  return row.title || row.description?.split('\n')[0] || '暂无作品文案';
+};
 const monitorTypeText = computed(() => {
   if (!target.value) return '仅关联作者';
   return target.value.targetType === 'creator_collection' ? '作者作品集监控' : '单作品监控';

@@ -6,6 +6,7 @@ import com.aizuda.snailjob.common.log.SnailJobLog;
 import com.aizuda.snailjob.model.dto.ExecuteResult;
 import lombok.RequiredArgsConstructor;
 import org.dromara.creator.service.ICreatorMonitorCommandService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,9 @@ import org.springframework.stereotype.Component;
 public class CreatorMonitorCollectJob {
 
     private final ICreatorMonitorCommandService creatorMonitorCommandService;
+
+    @Value("${creator.monitor.local-scheduler.enabled:false}")
+    private boolean localSchedulerEnabled;
 
     public ExecuteResult jobExecute(JobArgs jobArgs) {
         Integer count = creatorMonitorCommandService.collectDueTargets(100, "snail_job");
@@ -32,6 +36,9 @@ public class CreatorMonitorCollectJob {
         fixedDelayString = "${creator.monitor.scheduler.fixed-delay-ms:60000}"
     )
     public void collectDueTargetsByLocalScheduler() {
+        if (!localSchedulerEnabled) {
+            return;
+        }
         Integer count = creatorMonitorCommandService.collectDueTargets(100, "local_scheduler");
         if (count > 0) {
             SnailJobLog.LOCAL.info("creator monitor local scheduler collected due targets: {}", count);

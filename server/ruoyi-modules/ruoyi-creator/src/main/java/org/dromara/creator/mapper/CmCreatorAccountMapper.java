@@ -15,8 +15,7 @@ public interface CmCreatorAccountMapper extends BaseMapperPlus<CmCreatorAccount,
     @DataPermission({
         @DataColumn(key = "deptName", value = "mt.owner_dept_id"),
         @DataColumn(key = "userName", value = "mt.owner_user_id"),
-        @DataColumn(key = "superiorName", value = "COALESCE(mt.direct_superior_user_id,"
-            + " (SELECT leader FROM sys_dept WHERE dept_id = mt.owner_dept_id))")
+        @DataColumn(key = "subordinateName", value = "mt.owner_user_id")
     })
     Page<CmCreatorAccount> selectScopedPage(@Param("page") Page<CmCreatorAccount> page,
                                             @Param("query") CmCreatorAccount query);
@@ -24,8 +23,7 @@ public interface CmCreatorAccountMapper extends BaseMapperPlus<CmCreatorAccount,
     @DataPermission({
         @DataColumn(key = "deptName", value = "mt.owner_dept_id"),
         @DataColumn(key = "userName", value = "mt.owner_user_id"),
-        @DataColumn(key = "superiorName", value = "COALESCE(mt.direct_superior_user_id,"
-            + " (SELECT leader FROM sys_dept WHERE dept_id = mt.owner_dept_id))")
+        @DataColumn(key = "subordinateName", value = "mt.owner_user_id")
     })
     CmCreatorAccount selectScopedById(@Param("creatorId") Long creatorId);
 }

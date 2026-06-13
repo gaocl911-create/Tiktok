@@ -106,7 +106,10 @@ const formatNumber = (value?: number) => (value == null ? '--' : new Intl.Number
 const formatTime = (value?: string) => (value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '尚未采集');
 const displayAccountId = (row: CreatorAccount) =>
   [row.platformDisplayId, row.platformUserId, row.platformCreatorId].find((value) => value && value !== '0') || '--';
-const contentTitle = (row: ContentPost) => row.title || row.description?.split('\n')[0] || '未命名作品';
+const contentTitle = (row: ContentPost) => {
+  if (/^Douyin content \d+$/.test(row.title || '')) return '暂无作品文案';
+  return row.title || row.description?.split('\n')[0] || '暂无作品文案';
+};
 
 const loadCreator = async () => {
   const res = await getCreatorAccount(creatorId.value);
