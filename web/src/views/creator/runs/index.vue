@@ -9,7 +9,7 @@
     </header>
 
     <section class="surface filter-bar">
-      <el-select v-model="selectedTargetId" filterable placeholder="选择一个监控目标" @change="loadRuns">
+      <el-select v-model="selectedTargetId" filterable placeholder="选择一个监控目标" @change="handleTargetChange">
         <el-option v-for="item in targets" :key="item.targetId" :label="item.targetName" :value="item.targetId" />
       </el-select>
       <span class="filter-hint">先选择监控目标，再查看最近运行记录</span>
@@ -37,6 +37,13 @@
         </el-table-column>
       </el-table>
       <el-empty v-if="!loading && runs.length === 0" description="暂无运行记录" />
+      <pagination
+        v-show="total > 0"
+        v-model:page="query.pageNum"
+        v-model:limit="query.pageSize"
+        :total="total"
+        @pagination="loadRuns"
+      />
     </section>
   </div>
 </template>
@@ -51,6 +58,11 @@ const loading = ref(false);
 const targets = ref<MonitorTarget[]>([]);
 const runs = ref<CollectionRun[]>([]);
 const selectedTargetId = ref('');
+const total = ref(0);
+const query = reactive({
+  pageNum: 1,
+  pageSize: 20
+});
 
 const formatTime = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '--';
 const formatDuration = (value?: number) => value == null ? '--' : value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(1)} s`;
@@ -72,15 +84,22 @@ const loadTargets = async () => {
 const loadRuns = async () => {
   if (!selectedTargetId.value) {
     runs.value = [];
+    total.value = 0;
     return;
   }
   loading.value = true;
   try {
-    const res = await listTargetRuns(selectedTargetId.value, 50);
-    runs.value = res.data || [];
+    const res = await listTargetRuns(selectedTargetId.value, query);
+    runs.value = res.rows || [];
+    total.value = res.total || 0;
   } finally {
     loading.value = false;
   }
+};
+
+const handleTargetChange = () => {
+  query.pageNum = 1;
+  loadRuns();
 };
 
 onMounted(loadTargets);

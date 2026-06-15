@@ -52,9 +52,11 @@ public class MonitorTargetController {
 
     @SaCheckPermission("creator:target:query")
     @GetMapping("/{targetId}/runs")
-    public R<List<CmCollectionRun>> runs(@NotNull(message = "targetId is required") @PathVariable Long targetId,
-                                         @RequestParam(defaultValue = "30") int limit) {
-        return R.ok(creatorMonitorDataService.queryRecentCollectionRuns(targetId, limit));
+    public TableDataInfo<CmCollectionRun> runs(
+        @NotNull(message = "targetId is required") @PathVariable Long targetId,
+        PageQuery pageQuery
+    ) {
+        return creatorMonitorDataService.queryCollectionRunPage(targetId, pageQuery);
     }
 
     @SaCheckPermission("creator:target:add")

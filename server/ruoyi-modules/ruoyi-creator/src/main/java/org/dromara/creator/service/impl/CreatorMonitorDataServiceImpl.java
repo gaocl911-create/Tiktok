@@ -139,6 +139,16 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
     }
 
     @Override
+    public TableDataInfo<CmCollectionRun> queryCollectionRunPage(Long targetId, PageQuery pageQuery) {
+        requireVisibleTarget(targetId);
+        LambdaQueryWrapper<CmCollectionRun> lqw = Wrappers.lambdaQuery();
+        lqw.eq(CmCollectionRun::getTargetId, targetId);
+        lqw.orderByDesc(CmCollectionRun::getStartedAt);
+        Page<CmCollectionRun> page = collectionRunMapper.selectPage(pageQuery.build(), lqw);
+        return TableDataInfo.build(page);
+    }
+
+    @Override
     public List<CmCollectionRun> queryRecentCollectionRuns(Long targetId, int limit) {
         requireVisibleTarget(targetId);
         LambdaQueryWrapper<CmCollectionRun> lqw = Wrappers.lambdaQuery();

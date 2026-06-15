@@ -111,11 +111,11 @@ export const collectDueTargets = (limit = 100): AxiosPromise<number> =>
     params: { limit }
   });
 
-export const listTargetRuns = (targetId: string, limit = 30): AxiosPromise<CollectionRun[]> =>
+export const listTargetRuns = (targetId: string, params: Record<string, unknown>): AxiosPromise<CollectionRun[]> =>
   request({
     url: `/creator/target/${targetId}/runs`,
     method: 'get',
-    params: { limit }
+    params
   });
 
 export const listAlertRules = (params: Record<string, unknown>): AxiosPromise<AlertRule[]> =>

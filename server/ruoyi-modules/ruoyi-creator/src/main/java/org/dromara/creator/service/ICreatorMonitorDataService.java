@@ -32,6 +32,8 @@ public interface ICreatorMonitorDataService {
 
     List<CmContentSnapshot> queryRecentContentSnapshots(Long contentId, int limit);
 
+    TableDataInfo<CmCollectionRun> queryCollectionRunPage(Long targetId, PageQuery pageQuery);
+
     List<CmCollectionRun> queryRecentCollectionRuns(Long targetId, int limit);
 
     List<CmCollectionRun> queryRecentContentRuns(Long contentId, int limit);
