@@ -4,6 +4,7 @@
 !/.env.example
 application-local.yml
 application-local.yaml
+server/ruoyi-admin/src/main/resources/application-dev.yml
 
 # Java
 target/

@@ -11,9 +11,10 @@
     <section class="surface filter-bar">
       <el-input v-model="query.nickname" clearable placeholder="搜索作者昵称" :prefix-icon="Search" @keyup.enter="loadData" />
       <el-select v-model="query.profileStatus" clearable placeholder="全部状态">
-        <el-option label="数据完整" value="full" />
+        <el-option label="数据完整" value="success" />
         <el-option label="部分数据" value="partial" />
         <el-option label="采集失败" value="failed" />
+        <el-option label="等待采集" value="waiting_collect" />
       </el-select>
       <el-button :icon="Search" @click="loadData">查询</el-button>
     </section>

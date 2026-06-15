@@ -166,7 +166,7 @@ public class TikHubClient {
         }
         BigDecimal projected = spentTodayUsd.add(estimatedCostUsd).add(unitPriceUsd());
         if (projected.compareTo(budget) > 0) {
-            throw new ServiceException("TikHub daily budget exceeded before calling {}", endpoint);
+            throw new ServiceException("TikHub 今日预算已用完，无法调用 {}", endpoint);
         }
     }
 

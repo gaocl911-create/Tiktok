@@ -18,23 +18,58 @@
     </header>
 
     <section class="alert-summary">
-      <button class="summary-item" type="button" @click="filterByStatus('pending')">
+      <a class="summary-item" href="?panel=events&status=pending">
         <span>待处理</span><strong>{{ summary.pending }}</strong>
-      </button>
-      <button class="summary-item" type="button" @click="filterByStatus('tracking')">
+      </a>
+      <a class="summary-item" href="?panel=events&status=tracking">
         <span>跟踪中</span><strong>{{ summary.tracking }}</strong>
-      </button>
-      <button class="summary-item urgent" type="button" @click="filterBySeverity('urgent')">
+      </a>
+      <a class="summary-item urgent" href="?panel=events&severity=urgent">
         <span>紧急预警</span><strong>{{ summary.urgent }}</strong>
-      </button>
+      </a>
       <div class="summary-item">
         <span>已启用规则</span><strong>{{ enabledRuleCount }}</strong>
       </div>
     </section>
 
+    <nav class="alert-mode-navigation" aria-label="预警中心功能导航">
+      <a
+        id="alert-nav-events"
+        class="alert-mode-link"
+        :class="{ active: activeTab === 'events' }"
+        href="?panel=events"
+        :aria-current="activeTab === 'events' ? 'page' : undefined"
+      >
+        <span class="alert-mode-icon"><el-icon><Bell /></el-icon></span>
+        <span class="alert-mode-copy">
+          <strong>预警事件</strong>
+          <small>查看触发记录并跟踪处理进度</small>
+        </span>
+        <span class="alert-mode-count">{{ summary.pending + summary.tracking }}</span>
+      </a>
+      <a
+        id="alert-nav-rules"
+        class="alert-mode-link"
+        :class="{ active: activeTab === 'rules' }"
+        href="?panel=rules"
+        :aria-current="activeTab === 'rules' ? 'page' : undefined"
+      >
+        <span class="alert-mode-icon"><el-icon><Setting /></el-icon></span>
+        <span class="alert-mode-copy">
+          <strong>规则配置</strong>
+          <small>设置指标、阈值、范围和提醒等级</small>
+        </span>
+        <span class="alert-mode-count">{{ ruleTotal }}</span>
+      </a>
+    </nav>
+
     <section class="surface alert-workspace">
-      <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-        <el-tab-pane label="预警事件" name="events">
+      <div
+        id="alert-panel-events"
+        v-if="activeTab === 'events'"
+        class="alert-panel"
+        aria-labelledby="alert-nav-events"
+      >
           <div class="alert-filters">
             <el-select v-model="eventQuery.status" clearable placeholder="全部状态" @change="resetEventPage">
               <el-option label="待处理" value="pending" />
@@ -54,7 +89,7 @@
             <el-button :icon="Search" @click="resetEventPage">查询</el-button>
           </div>
 
-          <el-table v-loading="eventLoading" :data="events">
+          <el-table v-loading="activeTab === 'events' && eventLoading" :data="events">
             <el-table-column label="预警内容" min-width="320">
               <template #default="{ row }">
                 <button class="event-title" type="button" @click="openContentDetail(row.contentId)">
@@ -117,13 +152,18 @@
             :total="eventTotal"
             @pagination="loadEvents"
           />
-        </el-tab-pane>
+      </div>
 
-        <el-tab-pane label="规则配置" name="rules">
+      <div
+        id="alert-panel-rules"
+        v-else
+        class="alert-panel"
+        aria-labelledby="alert-nav-rules"
+      >
           <div class="rules-toolbar">
             <p>采集产生新快照后自动判断。窗口小于采集间隔时，预警精度以实际采集频率为准。</p>
           </div>
-          <el-table v-loading="ruleLoading" :data="rules">
+          <el-table v-loading="activeTab === 'rules' && ruleLoading" :data="rules">
             <el-table-column label="规则名称" prop="ruleName" min-width="180" />
             <el-table-column label="指标" width="90">
               <template #default="{ row }">{{ metricLabel(row.metricType) }}</template>
@@ -164,8 +204,7 @@
             :total="ruleTotal"
             @pagination="loadRules"
           />
-        </el-tab-pane>
-      </el-tabs>
+      </div>
     </section>
 
     <el-dialog v-model="ruleDialogVisible" :title="ruleForm.ruleId ? '编辑预警规则' : '新建预警规则'" width="620px">
@@ -232,7 +271,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowDown, Plus, Refresh, Search } from '@element-plus/icons-vue';
+import { ArrowDown, Bell, Plus, Refresh, Search, Setting } from '@element-plus/icons-vue';
 import type { FormInstance, FormRules } from 'element-plus';
 import {
   addAlertRule,
@@ -247,7 +286,8 @@ import {
 import type { AlertEvent, AlertRule, AlertRuleForm, ContentPost, CreatorAccount } from '@/api/creator/types';
 
 const router = useRouter();
-const activeTab = ref('events');
+const pageParams = new URLSearchParams(window.location.search);
+const activeTab = ref<'events' | 'rules'>(pageParams.get('panel') === 'rules' ? 'rules' : 'events');
 const eventLoading = ref(false);
 const ruleLoading = ref(false);
 const savingRule = ref(false);
@@ -259,9 +299,18 @@ const eventTotal = ref(0);
 const ruleTotal = ref(0);
 const ruleDialogVisible = ref(false);
 const ruleFormRef = ref<FormInstance>();
-const eventQuery = reactive({ pageNum: 1, pageSize: 10, status: '', severity: '', metricType: '' });
+const eventQuery = reactive({
+  pageNum: 1,
+  pageSize: 10,
+  status: pageParams.get('status') || '',
+  severity: pageParams.get('severity') || '',
+  metricType: ''
+});
 const ruleQuery = reactive({ pageNum: 1, pageSize: 10 });
 const summary = reactive({ pending: 0, tracking: 0, urgent: 0 });
+let eventRequestId = 0;
+let ruleRequestId = 0;
+let summaryRequestId = 0;
 
 const emptyRule = (): AlertRuleForm => ({
   ruleName: '',
@@ -318,30 +367,44 @@ const scopeLabel = (row: AlertRule) => row.scopeType === 'all'
     ? `指定作者：${creators.value.find((item) => item.creatorId === row.scopeId)?.nickname || row.scopeId}`
     : `指定作品：${contents.value.find((item) => item.contentId === row.scopeId)?.title || row.scopeId}`;
 
-const loadEvents = async () => {
-  eventLoading.value = true;
+const loadSummary = async () => {
+  const requestId = ++summaryRequestId;
   try {
-    const res = await listAlertEvents(eventQuery);
-    events.value = res.rows || [];
-    eventTotal.value = res.total || 0;
     const summaryRes = await listAlertEvents({ pageNum: 1, pageSize: 200 });
+    if (requestId !== summaryRequestId) return;
     const all = summaryRes.rows || [];
     summary.pending = all.filter((item) => item.status === 'pending').length;
     summary.tracking = all.filter((item) => item.status === 'tracking').length;
     summary.urgent = all.filter((item) => item.severity === 'urgent' && ['pending', 'tracking'].includes(item.status)).length;
+  } catch (e) {
+    // summary 失败不影响主表，吞掉即可
+  }
+};
+
+const loadEvents = async () => {
+  const requestId = ++eventRequestId;
+  eventLoading.value = true;
+  try {
+    const res = await listAlertEvents(eventQuery);
+    if (requestId !== eventRequestId) return;
+    events.value = res.rows || [];
+    eventTotal.value = res.total || 0;
+    loadSummary();
   } finally {
-    eventLoading.value = false;
+    if (requestId === eventRequestId) eventLoading.value = false;
   }
 };
 
 const loadRules = async () => {
+  const requestId = ++ruleRequestId;
   ruleLoading.value = true;
   try {
     const res = await listAlertRules(ruleQuery);
+    if (requestId !== ruleRequestId) return;
     rules.value = res.rows || [];
     ruleTotal.value = res.total || 0;
   } finally {
-    ruleLoading.value = false;
+    if (requestId === ruleRequestId) ruleLoading.value = false;
   }
 };
 
@@ -357,20 +420,6 @@ const loadOptions = async () => {
 const resetEventPage = () => {
   eventQuery.pageNum = 1;
   loadEvents();
-};
-const filterByStatus = (status: string) => {
-  activeTab.value = 'events';
-  eventQuery.status = status;
-  resetEventPage();
-};
-const filterBySeverity = (severity: string) => {
-  activeTab.value = 'events';
-  eventQuery.severity = severity;
-  resetEventPage();
-};
-const handleTabChange = (name: string | number) => {
-  if (name === 'rules') loadRules();
-  else loadEvents();
 };
 const openContentDetail = (contentId: string) => router.push(`/douyin/content/detail/${contentId}`);
 
@@ -445,14 +494,21 @@ onMounted(async () => {
 .summary-item {
   min-height: 92px;
   padding: 18px 20px;
+  color: inherit;
   text-align: left;
+  text-decoration: none;
   border: 0;
   border-right: 1px solid #e5e5e5;
   background: transparent;
 }
 
-button.summary-item {
+a.summary-item {
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+a.summary-item:hover {
+  background: var(--el-fill-color-light);
 }
 
 .summary-item:last-child {
@@ -480,7 +536,118 @@ button.summary-item {
 }
 
 .alert-workspace {
-  padding: 0 16px 16px;
+  padding: 16px;
+}
+
+.alert-mode-navigation {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.alert-mode-link {
+  display: flex;
+  align-items: center;
+  min-height: 76px;
+  gap: 12px;
+  padding: 14px 16px;
+  color: var(--el-text-color-primary);
+  text-decoration: none;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--el-bg-color);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  touch-action: manipulation;
+  user-select: none;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.alert-mode-link:hover {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 4px 12px rgb(64 158 255 / 12%);
+}
+
+.alert-mode-link.active {
+  color: #409eff;
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  box-shadow: 0 0 0 1px var(--el-color-primary-light-7);
+}
+
+.alert-mode-link:focus-visible {
+  outline: 3px solid var(--el-color-primary-light-5);
+  outline-offset: 2px;
+}
+
+.alert-mode-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  color: var(--el-text-color-secondary);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  font-size: 20px;
+}
+
+.alert-mode-link.active .alert-mode-icon {
+  color: #fff;
+  background: var(--el-color-primary);
+}
+
+.alert-mode-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.alert-mode-copy strong {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.alert-mode-copy small {
+  overflow: hidden;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alert-mode-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  color: var(--el-text-color-regular);
+  border-radius: 15px;
+  background: var(--el-fill-color);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.alert-mode-link.active .alert-mode-count {
+  color: var(--el-color-primary);
+  background: #fff;
+}
+
+.alert-panel {
+  min-height: 120px;
 }
 
 .alert-filters {
@@ -585,6 +752,10 @@ button.summary-item {
 }
 
 @media (max-width: 900px) {
+  .alert-mode-navigation {
+    grid-template-columns: 1fr;
+  }
+
   .alert-summary {
     grid-template-columns: 1fr 1fr;
   }

@@ -8,6 +8,7 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.service.DeptService;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.json.utils.JsonUtils;
+import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.creator.client.*;
 import org.dromara.creator.config.TikHubProperties;
@@ -21,6 +22,7 @@ import org.dromara.creator.service.ICreatorAlertService;
 import org.dromara.creator.service.ICreatorMonitorCommandService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.redisson.api.RLock;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -39,6 +41,9 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
     private static final String PROVIDER_TIKHUB = "tikhub";
     private static final String TARGET_CREATOR_COLLECTION = "creator_collection";
     private static final String TARGET_SINGLE_CONTENT = "single_content";
+    private static final String TARGET_COLLECT_LOCK_PREFIX = "creator:monitor:collect:";
+    private static final String TARGET_COLLECT_BUSY_MESSAGE = "该监控目标正在采集中，请稍后重试";
+    private static final long STALE_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000L;
     private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
 
     private final TikHubProperties tikHubProperties;
@@ -163,6 +168,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
     @Override
     public Integer collectDueTargets(int limit, String triggerSource) {
         Date now = new Date();
+        recoverStaleRuns(now);
         LambdaQueryWrapper<CmMonitorTarget> lqw = Wrappers.lambdaQuery();
         lqw.eq(CmMonitorTarget::getStatus, "active");
         lqw.and(wrapper -> wrapper
@@ -178,53 +184,69 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
             ? monitorTargetMapper.selectScopedList(lqw)
             : monitorTargetMapper.selectList(lqw);
         for (CmMonitorTarget target : dueTargets) {
-            collectTargetNow(target.getTargetId(), triggerSource);
-            count++;
+            try {
+                collectTargetNow(target.getTargetId(), triggerSource);
+                count++;
+            } catch (ServiceException ex) {
+                if (!TARGET_COLLECT_BUSY_MESSAGE.equals(ex.getMessage())) {
+                    throw ex;
+                }
+            }
         }
         return count;
     }
 
     @Override
     public MonitorCreateResultVo collectTargetNow(Long targetId, String triggerSource) {
-        CmMonitorTarget target = LoginHelper.isLogin()
-            ? monitorTargetMapper.selectScopedOne(
-                Wrappers.<CmMonitorTarget>lambdaQuery().eq(CmMonitorTarget::getTargetId, targetId))
-            : monitorTargetMapper.selectById(targetId);
-        if (target == null) {
-            throw new ServiceException("monitor target not found or access denied.");
+        RLock lock = RedisUtils.getClient().getLock(TARGET_COLLECT_LOCK_PREFIX + targetId);
+        if (!lock.tryLock()) {
+            throw new ServiceException(TARGET_COLLECT_BUSY_MESSAGE);
         }
-        CmCreatorAccount creator = creatorAccountMapper.selectById(target.getCreatorId());
-        if (creator == null) {
-            throw new ServiceException("target creator not found.");
-        }
-        CmContentPost singleContent = null;
-        if (!TARGET_CREATOR_COLLECTION.equals(target.getTargetType())) {
-            singleContent = contentPostMapper.selectById(target.getContentId());
-            if (singleContent == null) {
-                throw new ServiceException("target content not found.");
-            }
-        }
-        String actualTriggerSource = defaultText(triggerSource, "manual");
-        CmCollectionRun run = startRun("target_collect", actualTriggerSource, target, creator, singleContent, target.getPlatform());
-        TikHubClient client = null;
         try {
-            client = newTikHubClient();
-            int discovered = 0;
-            int collected = 0;
-            if (TARGET_CREATOR_COLLECTION.equals(target.getTargetType())) {
-                discovered = collectCreatorCollection(target, creator, client);
-                collected = collectBoundContentMetrics(target, creator, client, actualTriggerSource);
-            } else {
-                collectSingleContent(target, singleContent, client);
-                collected = 1;
+            CmMonitorTarget target = LoginHelper.isLogin()
+                ? monitorTargetMapper.selectScopedOne(
+                    Wrappers.<CmMonitorTarget>lambdaQuery().eq(CmMonitorTarget::getTargetId, targetId))
+                : monitorTargetMapper.selectById(targetId);
+            if (target == null) {
+                throw new ServiceException("monitor target not found or access denied.");
             }
-            finishRunSuccess(run, target, creator, singleContent, client, discovered, collected);
-            saveApiLogs(client, run);
-            return result(creator, singleContent, target, run, false, false, false);
-        } catch (RuntimeException ex) {
-            finishRunFailed(run, client, ex);
-            saveApiLogs(client, run);
-            throw ex;
+            CmCreatorAccount creator = creatorAccountMapper.selectById(target.getCreatorId());
+            if (creator == null) {
+                throw new ServiceException("target creator not found.");
+            }
+            CmContentPost singleContent = null;
+            if (!TARGET_CREATOR_COLLECTION.equals(target.getTargetType())) {
+                singleContent = contentPostMapper.selectById(target.getContentId());
+                if (singleContent == null) {
+                    throw new ServiceException("target content not found.");
+                }
+            }
+            String actualTriggerSource = defaultText(triggerSource, "manual");
+            CmCollectionRun run = startRun("target_collect", actualTriggerSource, target, creator, singleContent, target.getPlatform());
+            TikHubClient client = null;
+            try {
+                client = newTikHubClient();
+                int discovered = 0;
+                int collected = 0;
+                if (TARGET_CREATOR_COLLECTION.equals(target.getTargetType())) {
+                    discovered = collectCreatorCollection(target, creator, client);
+                    collected = collectBoundContentMetrics(target, creator, client, actualTriggerSource);
+                } else {
+                    collectSingleContent(target, singleContent, client);
+                    collected = 1;
+                }
+                finishRunSuccess(run, target, creator, singleContent, client, discovered, collected);
+                saveApiLogs(client, run);
+                return result(creator, singleContent, target, run, false, false, false);
+            } catch (RuntimeException ex) {
+                finishRunFailed(run, client, ex);
+                saveApiLogs(client, run);
+                throw ex;
+            }
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
     }
 
@@ -299,54 +321,15 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         if (contentIds == null || contentIds.isEmpty()) {
             return;
         }
-        List<CmMonitorTargetContent> relations = targetContentMapper.selectList(
-            Wrappers.<CmMonitorTargetContent>lambdaQuery()
-                .in(CmMonitorTargetContent::getContentId, contentIds)
-                .eq(CmMonitorTargetContent::getStatus, "active")
-        );
-        Set<Long> relatedTargetIds = new HashSet<>();
-        relations.forEach(relation -> relatedTargetIds.add(relation.getTargetId()));
-        List<CmMonitorTarget> manageableTargets = relatedTargetIds.isEmpty()
-            ? List.of()
-            : monitorTargetMapper.selectList(
-                Wrappers.<CmMonitorTarget>lambdaQuery()
-                    .in(CmMonitorTarget::getTargetId, relatedTargetIds)
-                    .eq(CmMonitorTarget::getStatus, "active")
-                    .eq(!canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId())
-            );
-        List<CmMonitorTarget> directSingleTargets = monitorTargetMapper.selectList(
+        List<Long> singleTargetIds = monitorTargetMapper.selectList(
             Wrappers.<CmMonitorTarget>lambdaQuery()
                 .eq(CmMonitorTarget::getTargetType, TARGET_SINGLE_CONTENT)
                 .in(CmMonitorTarget::getContentId, contentIds)
                 .eq(CmMonitorTarget::getStatus, "active")
                 .eq(!canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId())
-        );
-        if (!directSingleTargets.isEmpty()) {
-            Map<Long, CmMonitorTarget> targetsById = new LinkedHashMap<>();
-            manageableTargets.forEach(target -> targetsById.put(target.getTargetId(), target));
-            directSingleTargets.forEach(target -> targetsById.put(target.getTargetId(), target));
-            manageableTargets = new ArrayList<>(targetsById.values());
-        }
-        Set<Long> manageableTargetIds = new HashSet<>();
-        manageableTargets.forEach(target -> manageableTargetIds.add(target.getTargetId()));
-        List<Long> relationIds = relations.stream()
-            .filter(relation -> manageableTargetIds.contains(relation.getTargetId()))
-            .map(CmMonitorTargetContent::getId)
-            .toList();
-        List<Long> singleTargetIds = manageableTargets.stream()
-            .filter(target -> TARGET_SINGLE_CONTENT.equals(target.getTargetType()))
-            .filter(target -> contentIds.contains(target.getContentId()))
-            .map(CmMonitorTarget::getTargetId)
-            .toList();
-        if (relationIds.isEmpty() && singleTargetIds.isEmpty()) {
+        ).stream().map(CmMonitorTarget::getTargetId).toList();
+        if (singleTargetIds.isEmpty()) {
             throw new ServiceException("未找到可取消的作品监控，或当前用户无权操作");
-        }
-        if (!relationIds.isEmpty()) {
-            CmMonitorTargetContent update = new CmMonitorTargetContent();
-            update.setStatus("removed");
-            targetContentMapper.update(update,
-                Wrappers.<CmMonitorTargetContent>lambdaUpdate()
-                    .in(CmMonitorTargetContent::getId, relationIds));
         }
         markRelationsRemovedByTargetIds(singleTargetIds);
         markTargetsRemoved(singleTargetIds);
@@ -681,6 +664,29 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         run.setCreateTime(new Date());
         collectionRunMapper.insert(run);
         return run;
+    }
+
+    private void recoverStaleRuns(Date now) {
+        Date cutoff = new Date(now.getTime() - STALE_RUN_TIMEOUT_MS);
+        List<CmCollectionRun> staleRuns = collectionRunMapper.selectList(
+            Wrappers.<CmCollectionRun>lambdaQuery()
+                .eq(CmCollectionRun::getStatus, "running")
+                .lt(CmCollectionRun::getStartedAt, cutoff)
+        );
+        for (CmCollectionRun run : staleRuns) {
+            run.setStatus("failed");
+            run.setEndedAt(now);
+            run.setDurationMs((int) Math.min(Integer.MAX_VALUE, now.getTime() - run.getStartedAt().getTime()));
+            run.setFailedCount(1);
+            run.setErrorCode("STALE_RUN_RECOVERED");
+            run.setErrorMessage("采集进程中断或运行超时，系统已自动结束该记录。");
+            run.setResultSummaryJson(JsonUtils.toJsonString(Map.of(
+                "provider", defaultText(run.getProvider(), PROVIDER_TIKHUB),
+                "recovered", true,
+                "reason", "stale_running_record"
+            )));
+            collectionRunMapper.updateById(run);
+        }
     }
 
     private void finishRunSuccess(CmCollectionRun run, CmMonitorTarget target, CmCreatorAccount creator, CmContentPost content, TikHubClient client, int discovered, int collected) {
