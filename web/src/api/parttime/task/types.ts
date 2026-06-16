@@ -1,0 +1,41 @@
+export type PromotionTaskStatus = 'draft' | 'published' | 'paused' | 'finished';
+
+export interface PtPromotionTask extends BaseEntity {
+  taskId: string | number;
+  tenantId?: string;
+  taskTitle: string;
+  platform: 'douyin' | string;
+  taskDesc?: string;
+  taskRequirement?: string;
+  unitPrice: number;
+  totalQuota: number;
+  claimedCount?: number;
+  submittedCount?: number;
+  approvedCount?: number;
+  startTime?: string;
+  endTime?: string;
+  taskStatus: PromotionTaskStatus;
+  publishTime?: string;
+  pauseTime?: string;
+  finishTime?: string;
+  remark?: string;
+}
+
+export interface PtPromotionTaskQuery extends PageQuery {
+  taskTitle?: string;
+  platform?: string;
+  taskStatus?: PromotionTaskStatus | '';
+}
+
+export interface PtPromotionTaskForm {
+  taskId?: string | number;
+  taskTitle: string;
+  platform: 'douyin' | string;
+  taskDesc?: string;
+  taskRequirement?: string;
+  unitPrice: number;
+  totalQuota: number;
+  startTime?: string;
+  endTime?: string;
+  remark?: string;
+}
