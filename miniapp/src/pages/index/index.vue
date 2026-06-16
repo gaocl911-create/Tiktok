@@ -3,64 +3,196 @@
     <view class="welcome">
       <view>
         <text class="eyebrow">创作者任务</text>
-        <view class="welcome-title">下午好，欢迎回来</view>
-        <text class="welcome-copy">今天还有 2 个任务需要完成</text>
+        <view class="welcome-title">{{ greetingText }}</view>
+        <text class="welcome-copy">{{ summaryText }}</text>
       </view>
       <view class="avatar">兼</view>
     </view>
 
-    <view class="surface wallet-card">
-      <view class="wallet-item">
-        <text>待结算</text>
-        <strong>¥125.00</strong>
-      </view>
-      <view class="wallet-divider" />
-      <view class="wallet-item">
-        <text>累计已结算</text>
-        <strong>¥680.00</strong>
-      </view>
+    <view v-if="needLogin" class="surface state-card">
+      <view class="empty-mark">登</view>
+      <text class="empty-title">登录后查看你的兼职任务</text>
+      <text class="muted">完成微信登录和兼职资料审核后，就可以领取任务并提交作品。</text>
+      <wd-button @click="openProfile">去登录</wd-button>
     </view>
 
-    <view class="status-grid">
-      <view v-for="item in statuses" :key="item.label" class="surface status-card">
-        <strong>{{ item.value }}</strong>
-        <text>{{ item.label }}</text>
-      </view>
-    </view>
-
-    <view class="section-title">
-      <text>进行中的任务</text>
-      <text class="section-link" @click="openTasks">查看全部</text>
-    </view>
-
-    <view class="surface task-card">
-      <view class="task-row">
-        <view>
-          <wd-tag type="primary" plain>抖音短视频</wd-tag>
-          <view class="task-title">某奶茶新品推广</view>
+    <template v-else>
+      <view class="status-grid">
+        <view v-for="item in statuses" :key="item.label" class="surface status-card">
+          <strong>{{ item.value }}</strong>
+          <text>{{ item.label }}</text>
         </view>
-        <text class="task-price">¥20/条</text>
       </view>
-      <text class="task-desc">发布不少于15秒的视频，并带上指定话题。</text>
-      <view class="task-meta">
-        <text>剩余 2 天</text>
-        <text>提交截止 6月30日</text>
+
+      <view class="section-title">
+        <text>我的任务</text>
+        <text class="section-link" @click="openWorks">查看全部</text>
       </view>
-      <wd-button block @click="openTasks">继续完成任务</wd-button>
-    </view>
+
+      <view v-if="loading" class="surface state-card compact">
+        <text class="muted">正在加载任务...</text>
+      </view>
+
+      <view v-else-if="displayClaims.length === 0" class="surface state-card">
+        <view class="empty-mark">任</view>
+        <text class="empty-title">暂无进行中的任务</text>
+        <text class="muted">可以先去任务广场看看后台发布的真实兼职任务。</text>
+        <wd-button @click="openTasks">去任务广场</wd-button>
+      </view>
+
+      <view v-for="claim in displayClaims" v-else :key="claim.claimId" class="surface task-card">
+        <view class="task-row">
+          <view>
+            <wd-tag :type="statusType(claim.claimStatus)" plain>
+              {{ statusText(claim.claimStatus) }}
+            </wd-tag>
+            <view class="task-title">{{ claim.taskTitle || "未命名任务" }}</view>
+          </view>
+          <text class="platform">{{ formatPlatform(claim.platform) }}</text>
+        </view>
+
+        <view class="task-meta">
+          <text>领取时间 {{ formatTime(claim.claimTime) }}</text>
+        </view>
+
+        <wd-button
+          v-if="canSubmit(claim.claimStatus)"
+          block
+          @click="openSubmit(claim)"
+        >
+          提交作品链接
+        </wd-button>
+        <wd-button v-else block plain @click="openWorks">查看处理进度</wd-button>
+      </view>
+    </template>
   </view>
 </template>
 
 <script setup lang="ts">
-const statuses = [
-  { label: "进行中", value: 2 },
-  { label: "待审核", value: 1 },
-  { label: "已通过", value: 8 },
-];
+import { computed, ref } from "vue";
+import { onShow } from "@dcloudio/uni-app";
+import { getMyProfile, type StaffProfile } from "@/api/profile";
+import { listMyTasks, type ClaimStatus, type TaskClaim } from "@/api/task";
+import { hasToken } from "@/utils/request";
+
+const claims = ref<TaskClaim[]>([]);
+const profile = ref<StaffProfile | null>(null);
+const loading = ref(false);
+const needLogin = ref(!hasToken());
+
+const pendingSubmitCount = computed(
+  () => claims.value.filter((item) => item.claimStatus === "claimed" || item.claimStatus === "rejected").length,
+);
+
+const statuses = computed(() => [
+  { label: "待提交", value: pendingSubmitCount.value },
+  { label: "待审核", value: claims.value.filter((item) => item.claimStatus === "submitted").length },
+  { label: "已通过", value: claims.value.filter((item) => item.claimStatus === "approved").length },
+]);
+
+const displayClaims = computed(() =>
+  claims.value
+    .filter((item) => item.claimStatus === "claimed" || item.claimStatus === "rejected" || item.claimStatus === "submitted")
+    .slice(0, 2),
+);
+
+const greetingText = computed(() => {
+  const name = profile.value?.realName || "欢迎回来";
+  return needLogin.value ? "欢迎来到兼职工作台" : `${name}，你好`;
+});
+
+const summaryText = computed(() => {
+  if (needLogin.value) {
+    return "登录后查看你的任务、作品和审核进度。";
+  }
+  if (pendingSubmitCount.value > 0) {
+    return `当前有 ${pendingSubmitCount.value} 个任务需要提交作品。`;
+  }
+  if (claims.value.length > 0) {
+    return "你的任务进度会实时显示在这里。";
+  }
+  return "暂无已领取任务，可以去任务广场领取。";
+});
+
+const statusText = (status: ClaimStatus) => {
+  const map: Record<ClaimStatus, string> = {
+    claimed: "待提交",
+    submitted: "待审核",
+    approved: "已通过",
+    rejected: "已驳回",
+  };
+  return map[status] || status;
+};
+
+const statusType = (status: ClaimStatus) => {
+  const map: Record<ClaimStatus, "primary" | "warning" | "success" | "danger"> = {
+    claimed: "primary",
+    submitted: "warning",
+    approved: "success",
+    rejected: "danger",
+  };
+  return map[status] || "primary";
+};
+
+const canSubmit = (status: ClaimStatus) => status === "claimed" || status === "rejected";
+
+const formatPlatform = (platform?: string) => {
+  const map: Record<string, string> = {
+    douyin: "抖音",
+    xiaohongshu: "小红书",
+  };
+  return platform ? map[platform] || platform : "未指定平台";
+};
+
+const formatTime = (value?: string) => (value ? value.replace("T", " ").slice(0, 16) : "-");
+
+const loadHome = async () => {
+  needLogin.value = !hasToken();
+  if (needLogin.value) {
+    claims.value = [];
+    profile.value = null;
+    return;
+  }
+
+  if (loading.value) return;
+  loading.value = true;
+  try {
+    const [profileData, taskPage] = await Promise.all([
+      getMyProfile(false),
+      listMyTasks({ pageNum: 1, pageSize: 100 }),
+    ]);
+    profile.value = profileData;
+    claims.value = taskPage.rows || [];
+  } catch {
+    needLogin.value = true;
+    claims.value = [];
+    profile.value = null;
+  } finally {
+    loading.value = false;
+  }
+};
 
 const openTasks = () => {
   uni.switchTab({ url: "/pages/tasks/index" });
 };
+
+const openWorks = () => {
+  uni.switchTab({ url: "/pages/works/index" });
+};
+
+const openProfile = () => {
+  uni.switchTab({ url: "/pages/profile/index" });
+};
+
+const openSubmit = (claim: TaskClaim) => {
+  uni.navigateTo({
+    url: `/pages/works/submit?claimId=${claim.claimId}&taskTitle=${encodeURIComponent(
+      claim.taskTitle || "",
+    )}&platform=${encodeURIComponent(claim.platform || "")}`,
+  });
+};
+
+onShow(loadHome);
 </script>
 
 <style scoped lang="scss">
@@ -79,6 +211,7 @@ const openTasks = () => {
 
 .welcome-title {
   margin-top: 8rpx;
+  color: #172033;
   font-size: 44rpx;
   font-weight: 800;
   line-height: 1.25;
@@ -103,35 +236,6 @@ const openTasks = () => {
   font-weight: 700;
 }
 
-.wallet-card {
-  display: flex;
-  padding: 34rpx 28rpx;
-}
-
-.wallet-item {
-  flex: 1;
-}
-
-.wallet-item text {
-  display: block;
-  color: #778196;
-  font-size: 25rpx;
-}
-
-.wallet-item strong {
-  display: block;
-  margin-top: 12rpx;
-  color: #172033;
-  font-size: 40rpx;
-  font-variant-numeric: tabular-nums;
-}
-
-.wallet-divider {
-  width: 1rpx;
-  margin: 0 28rpx;
-  background: #e8edf3;
-}
-
 .status-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -150,6 +254,7 @@ const openTasks = () => {
 }
 
 .status-card strong {
+  color: #172033;
   font-size: 36rpx;
 }
 
@@ -165,39 +270,71 @@ const openTasks = () => {
   font-weight: 500;
 }
 
-.task-card {
-  padding: 28rpx;
-}
-
-.task-row,
-.task-meta {
+.state-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  gap: 24rpx;
+  padding: 80rpx 40rpx;
+  text-align: center;
 }
 
-.task-title {
-  margin-top: 16rpx;
+.state-card.compact {
+  padding: 44rpx 32rpx;
+}
+
+.empty-mark {
+  width: 104rpx;
+  height: 104rpx;
+  display: grid;
+  place-items: center;
+  color: #2563eb;
+  background: #eef4ff;
+  border-radius: 28rpx;
+  font-size: 38rpx;
+  font-weight: 800;
+}
+
+.empty-title {
+  color: #172033;
   font-size: 32rpx;
   font-weight: 700;
 }
 
-.task-price {
-  color: #d97706;
-  font-size: 30rpx;
-  font-weight: 700;
+.muted {
+  color: #778196;
+  font-size: 26rpx;
+  line-height: 1.6;
 }
 
-.task-desc {
-  display: block;
-  margin: 22rpx 0;
-  color: #5f6b7c;
-  font-size: 26rpx;
-  line-height: 1.65;
+.task-card {
+  padding: 28rpx;
+  margin-bottom: 22rpx;
+}
+
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.task-title {
+  margin-top: 16rpx;
+  color: #172033;
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.platform {
+  color: #778196;
+  font-size: 24rpx;
+  white-space: nowrap;
 }
 
 .task-meta {
-  margin-bottom: 26rpx;
+  margin: 24rpx 0 26rpx;
   color: #778196;
   font-size: 23rpx;
 }

@@ -103,6 +103,12 @@ public class PtStaffProfileServiceImpl implements IPtStaffProfileService {
         if (profile.getPhone() == null || profile.getPhone().isBlank()) {
             throw new ServiceException("请先绑定手机号");
         }
+        if (profile.getWechatId() == null || profile.getWechatId().isBlank()) {
+            throw new ServiceException("请先填写微信号");
+        }
+        if (profile.getDouyinId() == null || profile.getDouyinId().isBlank()) {
+            throw new ServiceException("请先填写抖音号");
+        }
         profile.setOnboardingStatus("pending");
         ptStaffProfileMapper.updateById(profile);
         return toVo(profile);

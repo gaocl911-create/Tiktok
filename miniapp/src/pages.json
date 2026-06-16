@@ -9,25 +9,39 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationBarTitleText": "兼职工作台"
+        "navigationBarTitleText": "兼职工作"
       }
     },
     {
       "path": "pages/tasks/index",
       "style": {
-        "navigationBarTitleText": "任务广场"
+        "navigationBarTitleText": "任务广场",
+        "enablePullDownRefresh": true
       }
     },
     {
       "path": "pages/works/index",
       "style": {
-        "navigationBarTitleText": "我的作品"
+        "navigationBarTitleText": "我的作品",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/works/submit",
+      "style": {
+        "navigationBarTitleText": "提交作品"
       }
     },
     {
       "path": "pages/profile/index",
       "style": {
         "navigationBarTitleText": "个人中心"
+      }
+    },
+    {
+      "path": "pages/profile/edit",
+      "style": {
+        "navigationBarTitleText": "兼职资料"
       }
     }
   ],

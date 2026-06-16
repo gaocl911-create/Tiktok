@@ -262,3 +262,43 @@ GET  /miniapp/submission/{id}
 5. 再进入结算和收益明细设计。
 
 当前最值得先完成的是第 1、2、3 步：小程序页面接真实接口并做端到端联调。后台已经可以发布任务和审核作品，下一步要让兼职人员在小程序里真正领取和提交。
+---
+
+## 2026-06-16 进度更新：小程序任务链路页面
+
+本次已完成小程序端 P0 的一部分真实接口接入：
+
+- 新增 `miniapp/src/api/task.ts`，封装兼职任务、领取记录、提交作品接口。
+- 修复 `miniapp/src/utils/request.ts`，兼容 RuoYi 分页接口返回的 `rows/total`，不再只读取 `data`。
+- 重写 `miniapp/src/pages/tasks/index.vue`：
+  - 读取 `GET /miniapp/task/list`；
+  - 展示任务标题、平台、单价、名额、截止时间、任务说明、任务要求；
+  - 支持点击领取任务 `POST /miniapp/task/{taskId}/claim`；
+  - 支持下拉刷新和触底分页。
+- 重写 `miniapp/src/pages/works/index.vue`：
+  - 读取 `GET /miniapp/task/my`；
+  - 展示我的领取任务和状态；
+  - 待提交/已驳回任务可进入提交作品页；
+  - 支持下拉刷新和触底分页。
+- 新增 `miniapp/src/pages/works/submit.vue`：
+  - 填写作品链接、作品文案、截图地址；
+  - 调用 `POST /miniapp/task/claim/{claimId}/submit-content` 提交审核。
+- 修复 `miniapp/src/pages.json` 中文标题乱码，并注册提交作品页面。
+
+验证结果：
+
+- `npm run type-check` 通过。
+- `npm run build:mp-weixin` 通过。
+- 构建产物位置：`miniapp/dist/build/mp-weixin`。
+
+当前注意点：
+
+- 小程序登录接口还没有完整闭环，任务接口需要登录 token 后才能正常领取和查看“我的任务”。
+- 后端已经有 `/miniapp/user/profile`，但还需要补齐微信登录入口或确认现有 Sa-Token 小程序登录路由。
+- 真机调试时不能长期用 `localhost:8088`，后续需要换成局域网 IP 或 HTTPS 域名；微信开发者工具本地模拟阶段可以先继续用本地地址。
+
+下一步建议：
+
+1. 先补齐微信小程序登录接口，让小程序能拿到后端 token。
+2. 再做兼职入驻/个人资料页，把兼职人员资料提交审核流程跑通。
+3. 然后做端到端联调：后台发布任务 -> 小程序领取 -> 小程序提交作品 -> 后台审核通过 -> 自动进入抖音内容监测。

@@ -15,4 +15,5 @@ public class WeChatMiniappProperties {
     private String appid;
     private String appSecret;
     private String apiBaseUrl = "https://api.weixin.qq.com";
+    private Boolean mockEnabled = false;
 }
