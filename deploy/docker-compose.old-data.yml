@@ -1,0 +1,78 @@
+services:
+  snailjob:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.snailjob
+    image: tiktok-platform-snailjob:latest
+    container_name: ${CONTAINER_PREFIX:-tiktok-platform-prod}-snailjob
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ry-vue}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      SNAIL_JOB_SERVER_HOST: snailjob
+      SNAIL_JOB_SERVER_PORT: 17888
+      SPRING_BOOT_ADMIN_CLIENT_ENABLED: "false"
+      JAVA_OPTS: ${SNAILJOB_JAVA_OPTS:--Xms256m -Xmx512m}
+    ports:
+      - "${SNAILJOB_WEB_PUBLISHED_PORT:-28800}:8800"
+      - "${SNAILJOB_SERVER_PUBLISHED_PORT:-27889}:17888"
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    image: tiktok-platform-api:latest
+    container_name: ${CONTAINER_PREFIX:-tiktok-platform-prod}-api
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8088
+      MONITOR_CLIENT_ENABLED: "false"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ry-vue}
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-ruoyi123}
+      SNAIL_JOB_SERVER_HOST: snailjob
+      SNAIL_JOB_SERVER_PORT: 17888
+      SNAIL_JOB_HOST: api
+      SNAIL_JOB_PORT: 28088
+      TIKHUB_ENABLED: ${TIKHUB_ENABLED:-false}
+      TIKHUB_API_TOKEN: ${TIKHUB_API_TOKEN:-}
+      WECHAT_MINIAPP_APPID: ${WECHAT_MINIAPP_APPID:-}
+      WECHAT_MINIAPP_APP_SECRET: ${WECHAT_MINIAPP_APP_SECRET:-}
+      WECHAT_MINIAPP_MOCK_ENABLED: ${WECHAT_MINIAPP_MOCK_ENABLED:-true}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m}
+    ports:
+      - "${API_PUBLISHED_PORT:-18088}:8088"
+    volumes:
+      - tiktok_platform_api_logs:/app/logs
+    depends_on:
+      - snailjob
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    image: tiktok-platform-web:latest
+    container_name: ${CONTAINER_PREFIX:-tiktok-platform-prod}-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PUBLISHED_PORT:-8081}:80"
+    depends_on:
+      - api
+
+networks:
+  default:
+    name: tiktok-platform_default
+    external: true
+
+volumes:
+  tiktok_platform_api_logs:

@@ -88,8 +88,8 @@
 
 <script setup lang="ts">
 import { ArrowLeft, Link, Refresh, VideoCamera } from '@element-plus/icons-vue';
-import { collectCreatorProfile, getCreatorAccount, listContentPosts } from '@/api/creator';
-import type { ContentPost, CreatorAccount } from '@/api/creator/types';
+import { collectCreatorProfile, collectTarget, getCreatorAccount, listContentPosts, listMonitorTargets } from '@/api/creator';
+import type { ContentPost, CreatorAccount, MonitorTarget } from '@/api/creator/types';
 import StatusBadge from '../components/StatusBadge.vue';
 
 const route = useRoute();
@@ -127,12 +127,22 @@ const loadContents = async () => {
   }
 };
 
+const findCreatorCollectionTarget = async (): Promise<MonitorTarget | undefined> => {
+  const res = await listMonitorTargets({ pageNum: 1, pageSize: 10, platform: 'douyin', creatorId: creatorId.value });
+  return res.rows?.find((item) => item.targetType === 'creator_collection');
+};
+
 const refreshProfile = async () => {
   refreshing.value = true;
   try {
-    await collectCreatorProfile(creatorId.value);
-    await loadCreator();
-    ElMessage.success('作者主页数据已刷新');
+    const target = await findCreatorCollectionTarget();
+    if (target?.targetId) {
+      await collectTarget(String(target.targetId));
+    } else {
+      await collectCreatorProfile(creatorId.value);
+    }
+    await Promise.all([loadCreator(), loadContents()]);
+    ElMessage.success(target?.targetId ? '作者及作品数据已刷新' : '作者主页数据已刷新');
   } finally {
     refreshing.value = false;
   }

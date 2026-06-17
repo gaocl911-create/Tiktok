@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 -- Creator monitor cancellation permissions.
 -- 2118-2122 are reserved for alert permissions, so cancellation uses 2130-2131.
 

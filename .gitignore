@@ -2,6 +2,7 @@
 /.env
 /.env.*
 !/.env.example
+deploy/.env.prod
 application-local.yml
 application-local.yaml
 server/ruoyi-admin/src/main/resources/application-dev.yml

@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 -- P0 data-scope and creator-baseline repair.
 -- Safe to run repeatedly.
 

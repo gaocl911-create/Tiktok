@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.service.DeptService;
 import org.dromara.common.core.utils.StringUtils;
@@ -35,6 +36,7 @@ import java.util.regex.Pattern;
  */
 @RequiredArgsConstructor
 @Service
+@Slf4j
 public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandService {
 
     private static final String PLATFORM_DOUYIN = "douyin";
@@ -188,9 +190,14 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
                 collectTargetNow(target.getTargetId(), triggerSource);
                 count++;
             } catch (ServiceException ex) {
-                if (!TARGET_COLLECT_BUSY_MESSAGE.equals(ex.getMessage())) {
-                    throw ex;
+                if (TARGET_COLLECT_BUSY_MESSAGE.equals(ex.getMessage())) {
+                    continue;
                 }
+                log.warn("creator monitor target collection failed, targetId={}, triggerSource={}, message={}",
+                    target.getTargetId(), triggerSource, ex.getMessage());
+            } catch (RuntimeException ex) {
+                log.warn("creator monitor target collection failed, targetId={}, triggerSource={}",
+                    target.getTargetId(), triggerSource, ex);
             }
         }
         return count;
@@ -229,7 +236,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
                 int discovered = 0;
                 int collected = 0;
                 if (TARGET_CREATOR_COLLECTION.equals(target.getTargetType())) {
-                    discovered = collectCreatorCollection(target, creator, client);
+                    discovered = collectCreatorCollection(target, creator, client, isImmediateTrigger(actualTriggerSource));
                     collected = collectBoundContentMetrics(target, creator, client, actualTriggerSource);
                 } else {
                     collectSingleContent(target, singleContent, client);
@@ -364,16 +371,17 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
                 .eq(CmMonitorTarget::getStatus, "active"));
     }
 
-    private int collectCreatorCollection(CmMonitorTarget target, CmCreatorAccount creator, TikHubClient client) {
+    private int collectCreatorCollection(CmMonitorTarget target, CmCreatorAccount creator, TikHubClient client,
+                                         boolean forceCollect) {
         Date now = new Date();
-        if (target.getNextProfileCollectAt() == null || !target.getNextProfileCollectAt().after(now)) {
+        if (forceCollect || target.getNextProfileCollectAt() == null || !target.getNextProfileCollectAt().after(now)) {
             TikHubCreatorProfile profile = tikHubDouyinMapper.mapCreator(client.getProfile(creator.getPlatformCreatorId()), creator.getPlatformCreatorId());
             upsertCreator(creator, creator.getPlatform(), profile);
             saveCreatorSnapshot(creator, target.getTargetId(), profile);
             target.setLastProfileCollectAt(now);
             target.setNextProfileCollectAt(addMinutes(now, target.getProfileCollectIntervalMin()));
         }
-        if (target.getNextDiscoveryAt() != null && target.getNextDiscoveryAt().after(now)) {
+        if (!forceCollect && target.getNextDiscoveryAt() != null && target.getNextDiscoveryAt().after(now)) {
             return 0;
         }
         List<TikHubContentProfile> profiles = tikHubDouyinMapper.mapContentList(client.getUserPosts(creator.getPlatformCreatorId()));
@@ -394,6 +402,10 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         target.setNextDiscoveryAt(addMinutes(now, target.getContentCollectIntervalMin()));
         monitorTargetMapper.updateById(target);
         return discovered;
+    }
+
+    private boolean isImmediateTrigger(String triggerSource) {
+        return "manual".equals(triggerSource);
     }
 
     private int collectBoundContentMetrics(CmMonitorTarget target, CmCreatorAccount creator, TikHubClient client,

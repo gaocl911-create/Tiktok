@@ -101,6 +101,22 @@ public class TikHubClient {
     }
 
     private JsonNode get(String endpoint, Map<String, Object> params) {
+        ServiceException lastError = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                return doGet(endpoint, params);
+            } catch (ServiceException ex) {
+                lastError = ex;
+                if (attempt >= 3 || !isRetryable(ex)) {
+                    throw ex;
+                }
+                sleepBeforeRetry();
+            }
+        }
+        throw lastError;
+    }
+
+    private JsonNode doGet(String endpoint, Map<String, Object> params) {
         checkBudget(endpoint);
         String url = buildUrl(endpoint);
         long started = System.currentTimeMillis();
@@ -157,6 +173,30 @@ public class TikHubClient {
             callLogs.add(log);
             throw new ServiceException("TikHub request failed at {}: {}", endpoint, e.getMessage());
         }
+    }
+
+    private boolean isRetryable(ServiceException ex) {
+        String message = ex.getMessage();
+        if (StringUtils.isBlank(message)) {
+            return false;
+        }
+        return message.contains("HTTP 500")
+            || message.contains("HTTP 502")
+            || message.contains("HTTP 503")
+            || message.contains("HTTP 504")
+            || message.contains("HTTP 520")
+            || message.contains("HTTP 521")
+            || message.contains("HTTP 522")
+            || message.contains("HTTP 523")
+            || message.contains("HTTP 524")
+            || message.contains("HTTP 525")
+            || message.contains("HTTP 526")
+            || message.contains("HTTP 527")
+            || message.contains("HTTP 530")
+            || message.contains("Read timed out")
+            || message.contains("timed out")
+            || message.contains("Connection reset")
+            || message.contains("Cloudflare");
     }
 
     private void checkBudget(String endpoint) {

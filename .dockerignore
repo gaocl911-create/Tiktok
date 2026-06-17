@@ -1,0 +1,14 @@
+.git
+.vscode
+.claude
+logs
+target
+
+server/logs
+server/**/target
+
+web/node_modules
+web/dist
+
+miniapp/node_modules
+miniapp/dist

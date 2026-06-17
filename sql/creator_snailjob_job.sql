@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 -- Real SnailJob schedule for creator monitoring collection.
 -- The unique key (namespace_id, biz_id) makes this script idempotent.
 
@@ -32,7 +34,7 @@ INSERT INTO sj_job (
     create_dt,
     update_dt
 ) VALUES (
-    'dev',
+    'prod',
     'creator-monitor-collect',
     'ruoyi_group',
     'Creator monitor collection',

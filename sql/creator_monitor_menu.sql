@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 -- Creator monitoring menus and permissions for RuoYi-Vue-Plus.
 -- Navigation is loaded dynamically from sys_menu. Re-run safely after menu changes.
 

@@ -1,0 +1,26 @@
+FROM maven:3.9.11-eclipse-temurin-17 AS build
+
+WORKDIR /workspace
+COPY deploy/maven-settings.xml /root/.m2/settings.xml
+COPY server ./server
+
+WORKDIR /workspace/server
+RUN mvn -s /root/.m2/settings.xml -DskipTests package
+
+FROM eclipse-temurin:17-jre-jammy
+
+ENV TZ=Asia/Shanghai \
+    JAVA_OPTS="" \
+    SERVER_PORT=8088 \
+    SPRING_PROFILES_ACTIVE=prod
+
+WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata fontconfig \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app/logs /ruoyi/server/temp
+
+COPY --from=build /workspace/server/ruoyi-admin/target/ruoyi-admin.jar /app/ruoyi-admin.jar
+
+EXPOSE 8088
+ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar /app/ruoyi-admin.jar"]

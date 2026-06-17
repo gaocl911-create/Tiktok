@@ -1,0 +1,24 @@
+FROM maven:3.9.11-eclipse-temurin-17 AS build
+
+WORKDIR /workspace
+COPY deploy/maven-settings.xml /root/.m2/settings.xml
+COPY server ./server
+
+WORKDIR /workspace/server
+RUN mvn -s /root/.m2/settings.xml -pl ruoyi-extend/ruoyi-snailjob-server -am -DskipTests package
+
+FROM eclipse-temurin:17-jre-jammy
+
+ENV TZ=Asia/Shanghai \
+    JAVA_OPTS=""
+
+WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata fontconfig \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app/logs
+
+COPY --from=build /workspace/server/ruoyi-extend/ruoyi-snailjob-server/target/ruoyi-snailjob-server.jar /app/ruoyi-snailjob-server.jar
+
+EXPOSE 8800 17888
+ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar /app/ruoyi-snailjob-server.jar"]

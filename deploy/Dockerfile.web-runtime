@@ -1,0 +1,3 @@
+FROM tiktok-platform-web:latest
+
+COPY dist /usr/share/nginx/html
