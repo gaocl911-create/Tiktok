@@ -17,6 +17,8 @@ export interface CreatorAccount {
   profileStatus?: string;
   lastProfileCollectAt?: string;
   lastContentScanAt?: string;
+  addedByName?: string;
+  contactWechat?: string;
 }
 
 export interface ContentPost {
@@ -75,6 +77,7 @@ export interface MonitorTarget {
   lastDiscoveryAt?: string;
   nextContentCollectAt?: string;
   remark?: string;
+  contactWechat?: string;
   tags?: string;
 }
 
@@ -103,6 +106,7 @@ export interface CreatorMonitorForm {
   profileInput: string;
   targetName?: string;
   remark?: string;
+  contactWechat?: string;
   tags?: string;
   profileCollectIntervalMin?: number;
   contentCollectIntervalMin?: number;

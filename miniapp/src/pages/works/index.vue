@@ -1,17 +1,19 @@
 <template>
   <view class="page-shell">
     <view class="page-heading">
+      <text class="eyebrow">WORKS</text>
       <text class="title">我的作品</text>
-      <text class="muted">这里显示已领取任务、提交状态和审核结果。</text>
+      <text class="subtitle">跟踪已领取任务、作品提交状态和后台审核结果。</text>
     </view>
 
     <view v-if="needLogin" class="surface state-card">
+      <view class="empty-mark">登</view>
       <text class="empty-title">请先登录</text>
       <text class="muted">登录后才能查看已领取任务和作品审核状态。</text>
       <wd-button @click="openProfile">去登录</wd-button>
     </view>
 
-    <view v-else-if="loading" class="surface state-card">
+    <view v-else-if="loading" class="surface state-card compact">
       <text class="muted">正在加载我的任务...</text>
     </view>
 
@@ -24,29 +26,25 @@
 
     <view v-for="claim in claims" v-else :key="claim.claimId" class="surface work-card">
       <view class="work-head">
-        <view>
-          <wd-tag :type="statusType(claim.claimStatus)" plain>
-            {{ statusText(claim.claimStatus) }}
-          </wd-tag>
+        <view class="work-main">
+          <text :class="['pill', statusTone(claim.claimStatus)]">{{ statusText(claim.claimStatus) }}</text>
           <view class="work-title">{{ claim.taskTitle || "未命名任务" }}</view>
         </view>
         <text class="platform">{{ formatPlatform(claim.platform) }}</text>
       </view>
 
-      <view class="info-row">
-        <text>领取时间</text>
-        <text>{{ formatTime(claim.claimTime) }}</text>
-      </view>
-      <view v-if="claim.submitTime" class="info-row">
-        <text>提交时间</text>
-        <text>{{ formatTime(claim.submitTime) }}</text>
+      <view class="info-list">
+        <view class="info-row">
+          <text>领取时间</text>
+          <text>{{ formatTime(claim.claimTime) }}</text>
+        </view>
+        <view v-if="claim.submitTime" class="info-row">
+          <text>提交时间</text>
+          <text>{{ formatTime(claim.submitTime) }}</text>
+        </view>
       </view>
 
-      <wd-button
-        v-if="canSubmit(claim.claimStatus)"
-        block
-        @click="openSubmit(claim)"
-      >
+      <wd-button v-if="canSubmit(claim.claimStatus)" block @click="openSubmit(claim)">
         提交作品链接
       </wd-button>
       <wd-button v-else block plain @click="openTasks">继续领取任务</wd-button>
@@ -77,14 +75,14 @@ const statusText = (status: ClaimStatus) => {
   return map[status] || status;
 };
 
-const statusType = (status: ClaimStatus) => {
-  const map: Record<ClaimStatus, "primary" | "warning" | "success" | "danger"> = {
-    claimed: "primary",
+const statusTone = (status: ClaimStatus) => {
+  const map: Record<ClaimStatus, string> = {
+    claimed: "",
     submitted: "warning",
     approved: "success",
     rejected: "danger",
   };
-  return map[status] || "primary";
+  return map[status] || "";
 };
 
 const canSubmit = (status: ClaimStatus) => status === "claimed" || status === "rejected";
@@ -108,13 +106,8 @@ const loadClaims = async (reset = false) => {
   if (loading.value) return;
   loading.value = true;
   try {
-    if (reset) {
-      pageNum.value = 1;
-    }
-    const page = await listMyTasks({
-      pageNum: pageNum.value,
-      pageSize,
-    });
+    if (reset) pageNum.value = 1;
+    const page = await listMyTasks({ pageNum: pageNum.value, pageSize });
     total.value = page.total || 0;
     claims.value = reset ? page.rows || [] : [...claims.value, ...(page.rows || [])];
   } finally {
@@ -150,80 +143,56 @@ onReachBottom(() => {
 </script>
 
 <style scoped lang="scss">
-.page-heading {
-  margin: 8rpx 4rpx 28rpx;
-}
-
-.title,
-.page-heading .muted {
-  display: block;
-}
-
-.title {
-  font-size: 44rpx;
-  font-weight: 800;
-}
-
-.page-heading .muted {
-  margin-top: 10rpx;
-  font-size: 26rpx;
-  line-height: 1.6;
-}
-
-.state-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24rpx;
-  padding: 80rpx 40rpx;
-  text-align: center;
-}
-
-.empty-mark {
-  width: 104rpx;
-  height: 104rpx;
-  display: grid;
-  place-items: center;
-  color: #2563eb;
-  background: #eef4ff;
-  border-radius: 28rpx;
-  font-size: 38rpx;
-  font-weight: 800;
-}
-
-.empty-title {
-  font-size: 32rpx;
-  font-weight: 700;
-}
-
 .work-card {
-  padding: 28rpx;
-  margin-bottom: 22rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
 }
 
 .work-head {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 22rpx;
 }
 
+.work-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .work-title {
-  margin-top: 16rpx;
-  font-size: 32rpx;
-  font-weight: 700;
-  line-height: 1.45;
+  margin-top: 18rpx;
+  color: var(--cm-ink);
+  font-size: 34rpx;
+  font-weight: 900;
+  line-height: 1.35;
 }
 
 .platform {
-  color: #778196;
+  color: var(--cm-muted);
   font-size: 24rpx;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.info-list {
+  margin: 26rpx 0 28rpx;
+  padding: 22rpx 24rpx;
+  background: #f8f7f3;
+  border: 1rpx solid var(--cm-line);
+  border-radius: 26rpx;
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
-  margin: 22rpx 0;
-  color: #5f6b7c;
-  font-size: 25rpx;
+  gap: 22rpx;
+  color: var(--cm-muted);
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+
+.info-row + .info-row {
+  margin-top: 10rpx;
 }
 </style>

@@ -39,6 +39,13 @@ export const addCreatorMonitor = (data: CreatorMonitorForm) =>
     data
   });
 
+export const updateCreatorContactWechat = (creatorId: string, contactWechat: string) =>
+  request({
+    url: `/creator/account/${creatorId}/contact-wechat`,
+    method: 'put',
+    data: { contactWechat }
+  });
+
 export const deleteCreatorMonitors = (creatorIds: string[]) =>
   request({
     url: `/creator/account/${creatorIds.join(',')}`,

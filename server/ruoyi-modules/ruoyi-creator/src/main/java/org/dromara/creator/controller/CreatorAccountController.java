@@ -9,6 +9,7 @@ import org.dromara.common.core.domain.R;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.creator.domain.CmCreatorAccount;
+import org.dromara.creator.domain.bo.CreatorContactWechatBo;
 import org.dromara.creator.domain.bo.CreatorMonitorCreateBo;
 import org.dromara.creator.domain.vo.MonitorCreateResultVo;
 import org.dromara.creator.service.ICreatorMonitorCommandService;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -66,6 +68,19 @@ public class CreatorAccountController {
     @PostMapping("/monitor")
     public R<MonitorCreateResultVo> addMonitor(@Valid @RequestBody CreatorMonitorCreateBo bo) {
         return R.ok(creatorMonitorCommandService.addCreatorMonitor(bo));
+    }
+
+    /**
+     * Update the contact WeChat account for a creator monitor.
+     */
+    @SaCheckPermission("creator:account:edit")
+    @PutMapping("/{creatorId}/contact-wechat")
+    public R<Void> updateContactWechat(
+        @NotNull(message = "creatorId is required") @PathVariable Long creatorId,
+        @RequestBody CreatorContactWechatBo bo
+    ) {
+        creatorMonitorCommandService.updateCreatorContactWechat(creatorId, bo == null ? null : bo.getContactWechat());
+        return R.ok();
     }
 
     /**

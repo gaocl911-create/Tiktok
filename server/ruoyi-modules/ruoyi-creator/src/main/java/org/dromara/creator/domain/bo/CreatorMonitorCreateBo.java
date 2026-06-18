@@ -18,6 +18,7 @@ public class CreatorMonitorCreateBo {
 
     private String targetName;
     private String remark;
+    private String contactWechat;
     private String tags;
 
     private Long ownerUserId;

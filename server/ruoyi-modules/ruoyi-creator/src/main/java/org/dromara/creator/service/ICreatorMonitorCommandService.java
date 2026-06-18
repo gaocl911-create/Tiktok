@@ -25,6 +25,14 @@ public interface ICreatorMonitorCommandService {
     MonitorCreateResultVo collectCreatorProfileNow(Long creatorId, String triggerSource);
 
     /**
+     * Update the contact WeChat account for the current user's creator monitor target.
+     *
+     * @param creatorId creator id whose monitor target should be updated
+     * @param contactWechat contact WeChat account, blank clears the value
+     */
+    void updateCreatorContactWechat(Long creatorId, String contactWechat);
+
+    /**
      * Cancel the current user's creator monitoring targets.
      * Shared creator data, content, snapshots, runs and alert history are preserved.
      *

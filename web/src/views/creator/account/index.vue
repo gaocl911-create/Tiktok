@@ -41,6 +41,23 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="添加人" prop="addedByName" width="150">
+          <template #default="{ row }">{{ row.addedByName || '--' }}</template>
+        </el-table-column>
+        <el-table-column label="微信号" prop="contactWechat" width="220">
+          <template #default="{ row }">
+            <span>{{ row.contactWechat || '--' }}</span>
+            <el-button
+              v-hasPermi="['creator:account:edit']"
+              link
+              type="primary"
+              :icon="Edit"
+              @click="openWechatDialog(row)"
+            >
+              修改
+            </el-button>
+          </template>
+        </el-table-column>
         <el-table-column label="粉丝" prop="followerCount" width="130" align="right">
           <template #default="{ row }">{{ formatNumber(row.followerCount) }}</template>
         </el-table-column>
@@ -86,6 +103,9 @@
         <el-form-item label="作者备注">
           <el-input v-model="form.remark" placeholder="例如：正式员工、品牌账号" />
         </el-form-item>
+        <el-form-item label="添加人微信号">
+          <el-input v-model="form.contactWechat" clearable placeholder="填写添加这个账号的微信号" />
+        </el-form-item>
         <div class="form-grid">
           <el-form-item label="主页刷新频率">
             <el-select v-model="form.profileCollectIntervalMin">
@@ -108,6 +128,21 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="wechatDialogVisible" title="修改微信号" width="420px">
+      <el-form label-position="top">
+        <el-form-item label="账号">
+          <el-input :model-value="wechatForm.nickname" disabled />
+        </el-form-item>
+        <el-form-item label="添加人微信号">
+          <el-input v-model="wechatForm.contactWechat" clearable placeholder="填写添加这个账号的微信号" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="wechatDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="wechatSubmitting" @click="submitWechat">保存</el-button>
+      </template>
+    </el-dialog>
+
     <creator-detail-drawer
       v-model="creatorDrawerVisible"
       :creator-id="selectedCreatorId"
@@ -117,8 +152,8 @@
 </template>
 
 <script setup lang="ts">
-import { Plus, Search } from '@element-plus/icons-vue';
-import { addCreatorMonitor, deleteCreatorMonitors, listCreatorAccounts } from '@/api/creator';
+import { Edit, Plus, Search } from '@element-plus/icons-vue';
+import { addCreatorMonitor, deleteCreatorMonitors, listCreatorAccounts, updateCreatorContactWechat } from '@/api/creator';
 import type { CreatorAccount, CreatorMonitorForm } from '@/api/creator/types';
 import CreatorDetailDrawer from '../components/CreatorDetailDrawer.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -126,8 +161,10 @@ import StatusBadge from '../components/StatusBadge.vue';
 const router = useRouter();
 const loading = ref(false);
 const submitting = ref(false);
+const wechatSubmitting = ref(false);
 const deletingId = ref('');
 const dialogVisible = ref(false);
+const wechatDialogVisible = ref(false);
 const creatorDrawerVisible = ref(false);
 const selectedCreatorId = ref('');
 const rows = ref<CreatorAccount[]>([]);
@@ -138,8 +175,14 @@ const form = reactive<CreatorMonitorForm>({
   platform: 'douyin',
   profileInput: '',
   remark: '',
+  contactWechat: '',
   profileCollectIntervalMin: 360,
   contentCollectIntervalMin: 30
+});
+const wechatForm = reactive({
+  creatorId: '',
+  nickname: '',
+  contactWechat: ''
 });
 const rules: ElFormRules = {
   profileInput: [{ required: true, message: '请粘贴抖音主页链接或分享文案', trigger: 'blur' }]
@@ -159,6 +202,13 @@ const openCreator = (creatorId: string) => {
 
 const goCreatorDetail = (creatorId: string) => {
   router.push(`/douyin/account/detail/${creatorId}`);
+};
+
+const openWechatDialog = (row: CreatorAccount) => {
+  wechatForm.creatorId = row.creatorId;
+  wechatForm.nickname = row.nickname || displayAccountId(row);
+  wechatForm.contactWechat = row.contactWechat || '';
+  wechatDialogVisible.value = true;
 };
 
 const loadData = async () => {
@@ -188,6 +238,19 @@ const removeCreator = async (row: CreatorAccount) => {
   }
 };
 
+const submitWechat = async () => {
+  if (!wechatForm.creatorId) return;
+  wechatSubmitting.value = true;
+  try {
+    await updateCreatorContactWechat(wechatForm.creatorId, wechatForm.contactWechat);
+    ElMessage.success('微信号已更新');
+    wechatDialogVisible.value = false;
+    await loadData();
+  } finally {
+    wechatSubmitting.value = false;
+  }
+};
+
 const submit = async () => {
   await formRef.value?.validate();
   submitting.value = true;
@@ -197,6 +260,7 @@ const submit = async () => {
     dialogVisible.value = false;
     form.profileInput = '';
     form.remark = '';
+    form.contactWechat = '';
     await loadData();
   } finally {
     submitting.value = false;

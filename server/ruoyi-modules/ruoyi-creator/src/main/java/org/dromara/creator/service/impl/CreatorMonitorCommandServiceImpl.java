@@ -304,6 +304,23 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void updateCreatorContactWechat(Long creatorId, String contactWechat) {
+        if (creatorId == null) {
+            throw new ServiceException("creatorId is required.");
+        }
+        CmMonitorTarget target = findEditableCreatorTarget(creatorId);
+        if (target == null) {
+            throw new ServiceException("未找到可修改的账号监控，或当前用户无权操作");
+        }
+        String normalized = StringUtils.isBlank(contactWechat) ? null : contactWechat.trim();
+        target.setContactWechat(truncate(normalized, 128));
+        target.setUpdateBy(LoginHelper.getUserId());
+        target.setUpdateTime(new Date());
+        monitorTargetMapper.updateById(target);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteCreators(Collection<Long> creatorIds) {
         if (creatorIds == null || creatorIds.isEmpty()) {
             return;
@@ -560,6 +577,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         target.setNextDiscoveryAt(addMinutes(now, target.getContentCollectIntervalMin()));
         target.setDataStatus("waiting_new_content");
         target.setRemark(bo.getRemark());
+        target.setContactWechat(bo.getContactWechat());
         target.setTags(bo.getTags());
         if (target.getTargetId() == null) {
             monitorTargetMapper.insert(target);
@@ -891,6 +909,17 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         lqw.eq(CmMonitorTarget::getCreatorId, creatorId);
         lqw.eq(CmMonitorTarget::getTargetType, TARGET_CREATOR_COLLECTION);
         lqw.eq(CmMonitorTarget::getStatus, "active");
+        lqw.last("limit 1");
+        return monitorTargetMapper.selectScopedOne(lqw);
+    }
+
+    private CmMonitorTarget findEditableCreatorTarget(Long creatorId) {
+        LambdaQueryWrapper<CmMonitorTarget> lqw = Wrappers.lambdaQuery();
+        lqw.eq(CmMonitorTarget::getCreatorId, creatorId);
+        lqw.eq(CmMonitorTarget::getTargetType, TARGET_CREATOR_COLLECTION);
+        lqw.eq(CmMonitorTarget::getStatus, "active");
+        lqw.eq(!canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId());
+        lqw.orderByDesc(CmMonitorTarget::getUpdateTime);
         lqw.last("limit 1");
         return monitorTargetMapper.selectScopedOne(lqw);
     }

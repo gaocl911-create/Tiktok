@@ -1,39 +1,51 @@
 <template>
   <view class="page-shell">
     <view class="surface profile-card">
-      <view class="avatar">{{ isLoggedIn ? "微" : "未" }}</view>
-      <view class="profile-copy">
-        <view class="profile-name">{{ profileName }}</view>
-        <text class="muted">
-          {{ isLoggedIn ? `openid：${shortOpenid}` : "登录后才能领取任务、提交作品和查看审核状态" }}
-        </text>
+      <view class="profile-main">
+        <view class="avatar">{{ isLoggedIn ? "兼" : "未" }}</view>
+        <view class="profile-copy">
+          <text class="profile-kicker">个人账户</text>
+          <view class="profile-name">{{ profileName }}</view>
+          <text class="profile-openid">
+            {{ isLoggedIn ? `ID：${shortOpenid}` : "登录后才能领取任务、提交作品和查看审核状态。" }}
+          </text>
+        </view>
+        <text :class="['pill', isLoggedIn ? 'success' : 'warning']">{{ loginTagText }}</text>
       </view>
-      <wd-tag :type="loginTagType" plain>{{ loginTagText }}</wd-tag>
+
+      <view class="profile-divider" />
+
+      <view class="profile-bottom" @click="handleProfileAction">
+        <view>
+          <text class="bottom-label">资料状态</text>
+          <text class="bottom-value">{{ isLoggedIn ? onboardingText : "待登录" }}</text>
+        </view>
+        <view class="profile-action">
+          <text>{{ isLoggedIn ? "查看资料" : "先登录" }}</text>
+          <text class="action-arrow">›</text>
+        </view>
+      </view>
     </view>
 
     <view v-if="isLoggedIn" class="surface onboarding-card" @click="openProfileEdit">
       <view>
         <view class="onboarding-title">兼职资料</view>
-        <text class="muted">{{ onboardingHint }}</text>
+        <text class="onboarding-copy">{{ onboardingHint }}</text>
       </view>
       <view class="onboarding-side">
-        <wd-tag :type="onboardingTagType" plain>{{ onboardingText }}</wd-tag>
+        <text :class="['pill', onboardingTone]">{{ onboardingText }}</text>
         <text class="arrow">›</text>
       </view>
     </view>
 
     <view v-if="!isLoggedIn" class="surface login-card">
       <view class="login-title">先完成小程序登录</view>
-      <text class="muted">
-        微信小程序正式流程是：前端调用 wx.login 获取 code，后端用 code 换 openid，再签发系统 token。
+      <text class="login-copy">
+        正式流程是前端调用 wx.login 获取 code，后端用 code 换 openid，再签发系统 token。本地开发可以先使用模拟登录。
       </text>
-      <wd-button block :loading="loggingIn === 'wechat'" @click="handleWechatLogin">
-        微信登录
-      </wd-button>
-      <wd-button block plain :loading="loggingIn === 'mock'" @click="handleMockLogin">
-        开发模拟登录
-      </wd-button>
-      <text class="tips">本地开发先用模拟登录即可；上线前再切回真实微信登录。</text>
+      <wd-button block :loading="loggingIn === 'wechat'" @click="handleWechatLogin">微信登录</wd-button>
+      <wd-button block plain :loading="loggingIn === 'mock'" @click="handleMockLogin">开发模拟登录</wd-button>
+      <text class="tips">上线前再切回真实微信登录。</text>
     </view>
 
     <view class="section-title">账户与业务</view>
@@ -44,7 +56,10 @@
         class="menu-item"
         @click="handleMenu(item)"
       >
-        <text>{{ item.label }}</text>
+        <view>
+          <text class="menu-title">{{ item.label }}</text>
+          <text v-if="item.desc" class="menu-desc">{{ item.desc }}</text>
+        </view>
         <text class="arrow">›</text>
       </view>
     </view>
@@ -66,6 +81,7 @@ import { useAuthStore } from "@/stores/auth";
 
 interface MenuItem {
   label: string;
+  desc?: string;
   action: "profile" | "tasks" | "works" | "todo";
 }
 
@@ -76,35 +92,36 @@ const profile = ref<StaffProfile>({});
 
 const statusMap: Record<
   OnboardingStatus,
-  { text: string; hint: string; tag: "primary" | "warning" | "success" | "danger" }
+  { text: string; hint: string; tone: "" | "warning" | "success" | "danger" }
 > = {
   incomplete: {
     text: "未完善",
     hint: "补齐手机号、微信号和抖音号后提交审核。",
-    tag: "warning",
+    tone: "warning",
   },
   pending: {
     text: "待审核",
     hint: "资料已提交，等待后台管理员审核。",
-    tag: "primary",
+    tone: "warning",
   },
   approved: {
     text: "已通过",
     hint: "资料已审核通过，可以领取任务。",
-    tag: "success",
+    tone: "success",
   },
   rejected: {
     text: "已驳回",
     hint: "请查看原因并重新提交资料。",
-    tag: "danger",
+    tone: "danger",
   },
 };
 
 const menuItems: MenuItem[] = [
-  { label: "完善兼职资料", action: "profile" },
-  { label: "我的任务", action: "works" },
-  { label: "佣金明细", action: "todo" },
-  { label: "结算记录", action: "todo" },
+  { label: "完善兼职资料", desc: "手机号、微信号、抖音号", action: "profile" },
+  { label: "任务广场", desc: "查看可领取任务", action: "tasks" },
+  { label: "我的作品", desc: "提交链接与审核进度", action: "works" },
+  { label: "佣金明细", desc: "后续接入结算数据", action: "todo" },
+  { label: "结算记录", desc: "后续接入提现记录", action: "todo" },
   { label: "用户协议与隐私政策", action: "todo" },
 ];
 
@@ -117,11 +134,10 @@ const shortOpenid = computed(() => {
   if (!openid.value) return "-";
   return openid.value.length > 18 ? `${openid.value.slice(0, 18)}...` : openid.value;
 });
-const loginTagType = computed(() => (isLoggedIn.value ? "success" : "warning"));
 const loginTagText = computed(() => (isLoggedIn.value ? "已登录" : "待登录"));
 const onboardingText = computed(() => statusMap[currentStatus.value].text);
 const onboardingHint = computed(() => statusMap[currentStatus.value].hint);
-const onboardingTagType = computed(() => statusMap[currentStatus.value].tag);
+const onboardingTone = computed(() => statusMap[currentStatus.value].tone);
 
 const loadProfile = async () => {
   if (!isLoggedIn.value) {
@@ -139,6 +155,14 @@ const loadProfile = async () => {
 const openProfileEdit = () => {
   if (!isLoggedIn.value) return;
   uni.navigateTo({ url: "/pages/profile/edit" });
+};
+
+const handleProfileAction = () => {
+  if (isLoggedIn.value) {
+    openProfileEdit();
+    return;
+  }
+  uni.showToast({ title: "请先登录", icon: "none" });
 };
 
 const handleWechatLogin = async () => {
@@ -189,24 +213,27 @@ onShow(loadProfile);
 </script>
 
 <style scoped lang="scss">
-.profile-card,
-.onboarding-card {
-  display: flex;
-  align-items: center;
-  gap: 22rpx;
+.profile-card {
   padding: 30rpx;
 }
 
+.profile-main {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+}
+
 .avatar {
-  width: 96rpx;
-  height: 96rpx;
+  width: 92rpx;
+  height: 92rpx;
   display: grid;
+  flex: 0 0 92rpx;
   place-items: center;
   color: #fff;
-  background: linear-gradient(135deg, #2563eb, #172033);
-  border-radius: 50%;
+  background: var(--cm-ink);
+  border-radius: 28rpx;
   font-size: 34rpx;
-  font-weight: 700;
+  font-weight: 900;
 }
 
 .profile-copy {
@@ -214,28 +241,101 @@ onShow(loadProfile);
   min-width: 0;
 }
 
+.profile-kicker,
+.profile-openid,
+.bottom-label,
+.bottom-value {
+  display: block;
+}
+
+.profile-kicker {
+  color: var(--cm-muted);
+  font-size: 22rpx;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
 .profile-name {
-  margin-bottom: 8rpx;
-  font-size: 32rpx;
+  margin-top: 6rpx;
+  color: var(--cm-ink);
+  font-size: 42rpx;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
+.profile-openid {
+  margin-top: 8rpx;
+  color: var(--cm-muted);
+  font-size: 23rpx;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.profile-divider {
+  height: 1rpx;
+  margin: 30rpx 0 24rpx;
+  background: var(--cm-line);
+}
+
+.profile-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.bottom-label {
+  color: var(--cm-muted);
+  font-size: 22rpx;
   font-weight: 700;
 }
 
-.profile-card .muted,
-.login-card .muted,
-.onboarding-card .muted {
+.bottom-value {
+  margin-top: 6rpx;
+  color: var(--cm-ink);
+  font-size: 30rpx;
+  font-weight: 900;
+}
+
+.profile-action {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-height: 58rpx;
+  padding: 0 20rpx;
+  color: #fff;
+  background: var(--cm-ink);
+  border-radius: 999rpx;
   font-size: 24rpx;
-  line-height: 1.6;
+  font-weight: 800;
+}
+
+.action-arrow {
+  font-size: 30rpx;
+  line-height: 1;
 }
 
 .onboarding-card {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin-top: 22rpx;
+  gap: 22rpx;
+  margin-top: 20rpx;
+  padding: 28rpx 30rpx;
 }
 
 .onboarding-title {
   margin-bottom: 8rpx;
-  font-size: 30rpx;
-  font-weight: 700;
+  color: var(--cm-ink);
+  font-size: 32rpx;
+  font-weight: 900;
+}
+
+.onboarding-copy {
+  color: var(--cm-muted);
+  font-size: 24rpx;
+  line-height: 1.55;
 }
 
 .onboarding-side {
@@ -248,19 +348,25 @@ onShow(loadProfile);
   display: flex;
   flex-direction: column;
   gap: 22rpx;
-  margin-top: 22rpx;
-  padding: 30rpx;
+  margin-top: 24rpx;
+  padding: 32rpx;
 }
 
 .login-title {
-  font-size: 32rpx;
-  font-weight: 800;
+  color: var(--cm-ink);
+  font-size: 34rpx;
+  font-weight: 900;
+}
+
+.login-copy,
+.tips {
+  color: var(--cm-muted);
+  font-size: 24rpx;
+  line-height: 1.65;
 }
 
 .tips {
-  color: #a4adba;
-  font-size: 23rpx;
-  line-height: 1.6;
+  color: #aaa69b;
 }
 
 .menu-list {
@@ -268,31 +374,49 @@ onShow(loadProfile);
 }
 
 .menu-item {
-  min-height: 100rpx;
+  min-height: 112rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 28rpx;
-  border-bottom: 1rpx solid #edf1f5;
-  font-size: 28rpx;
+  gap: 20rpx;
+  padding: 22rpx 30rpx;
+  border-bottom: 1rpx solid var(--cm-line);
 }
 
 .menu-item:last-child {
   border-bottom: 0;
 }
 
+.menu-title,
+.menu-desc {
+  display: block;
+}
+
+.menu-title {
+  color: var(--cm-ink);
+  font-size: 29rpx;
+  font-weight: 800;
+}
+
+.menu-desc {
+  margin-top: 8rpx;
+  color: var(--cm-muted);
+  font-size: 23rpx;
+}
+
 .arrow {
-  color: #a4adba;
-  font-size: 40rpx;
+  color: #aaa69b;
+  font-size: 44rpx;
+  line-height: 1;
 }
 
 :deep(.logout-btn) {
-  margin-top: 28rpx;
+  margin-top: 30rpx;
 }
 
 .version {
   margin-top: 44rpx;
-  color: #a4adba;
+  color: #aaa69b;
   font-size: 23rpx;
   text-align: center;
 }

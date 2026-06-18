@@ -117,6 +117,7 @@ create table cm_monitor_target
     status                          varchar(32)     default 'active'            comment 'active,paused,stopped,failed',
     data_status                     varchar(32)     default 'pending'           comment 'pending,full,partial,no_new_content,failed,budget_limited',
     remark                          varchar(500)    default null                comment 'business remark',
+    contact_wechat                  varchar(128)    default null                comment 'contact wechat account',
     tags                            varchar(500)    default null                comment 'comma separated tags',
     create_dept                     bigint(20)      default null                comment 'create department',
     create_by                       bigint(20)      default null                comment 'create user',

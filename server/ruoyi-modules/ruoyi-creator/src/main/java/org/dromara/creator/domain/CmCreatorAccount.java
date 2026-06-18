@@ -1,6 +1,7 @@
 package org.dromara.creator.domain;
 
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -43,6 +44,12 @@ public class CmCreatorAccount extends TenantEntity {
     private Date lastProfileCollectAt;
     private Date lastContentScanAt;
     private String rawProfileJson;
+
+    @TableField(exist = false)
+    private String addedByName;
+
+    @TableField(exist = false)
+    private String contactWechat;
 
     @TableLogic
     private String delFlag;

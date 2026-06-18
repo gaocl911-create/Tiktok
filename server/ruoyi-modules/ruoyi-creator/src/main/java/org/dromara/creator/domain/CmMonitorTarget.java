@@ -45,6 +45,7 @@ public class CmMonitorTarget extends TenantEntity {
     private String status;
     private String dataStatus;
     private String remark;
+    private String contactWechat;
     private String tags;
 
     @TableLogic

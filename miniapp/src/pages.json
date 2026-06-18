@@ -46,8 +46,8 @@
     }
   ],
   "tabBar": {
-    "color": "#778196",
-    "selectedColor": "#2563eb",
+    "color": "#77736b",
+    "selectedColor": "#0b0b0b",
     "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [
@@ -72,8 +72,8 @@
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "创作者任务",
-    "navigationBarBackgroundColor": "#ffffff",
-    "backgroundColor": "#f5f7fa",
+    "navigationBarBackgroundColor": "#f6f5f1",
+    "backgroundColor": "#f6f5f1",
     "backgroundTextStyle": "dark"
   }
 }
