@@ -130,8 +130,12 @@ public class CreatorAlertServiceImpl implements ICreatorAlertService {
         }
         for (CmAlertRule rule : applicableRules(content)) {
             Evaluation evaluation = evaluate(rule, content, snapshot);
-            if (evaluation != null && evaluation.observed().compareTo(rule.getThresholdValue()) >= 0) {
-                createOrUpdateEvent(rule, content, snapshot, evaluation);
+            if (evaluation == null) {
+                continue;
+            }
+            CmAlertEvent latest = latestEvent(rule.getRuleId(), content.getContentId());
+            if (shouldTrigger(rule, evaluation, latest)) {
+                createOrUpdateEvent(rule, content, snapshot, evaluation, latest);
             }
         }
     }
@@ -191,9 +195,29 @@ public class CreatorAlertServiceImpl implements ICreatorAlertService {
         return contentSnapshotMapper.selectOne(insideWindow);
     }
 
+    private boolean shouldTrigger(CmAlertRule rule, Evaluation evaluation, CmAlertEvent latest) {
+        if (RULE_CUMULATIVE.equals(rule.getRuleType())) {
+            BigInteger baseline = isHandledEvent(latest) && latest.getObservedValue() != null
+                ? latest.getObservedValue()
+                : BigInteger.ZERO;
+            return evaluation.observed().subtract(baseline).max(BigInteger.ZERO)
+                .compareTo(rule.getThresholdValue()) >= 0;
+        }
+        if (evaluation.observed().compareTo(rule.getThresholdValue()) < 0) {
+            return false;
+        }
+        return !isHandledEvent(latest)
+            || latest.getWindowEndAt() == null
+            || evaluation.windowStart() == null
+            || evaluation.windowStart().after(latest.getWindowEndAt());
+    }
+
+    private boolean isHandledEvent(CmAlertEvent event) {
+        return event != null && ("resolved".equals(event.getStatus()) || "ignored".equals(event.getStatus()));
+    }
+
     private void createOrUpdateEvent(CmAlertRule rule, CmContentPost content, CmContentSnapshot snapshot,
-                                     Evaluation evaluation) {
-        CmAlertEvent latest = latestEvent(rule.getRuleId(), content.getContentId());
+                                     Evaluation evaluation, CmAlertEvent latest) {
         Date now = snapshot.getCollectedAt();
         if (latest != null && ("pending".equals(latest.getStatus()) || "tracking".equals(latest.getStatus()))) {
             latest.setObservedValue(evaluation.observed());

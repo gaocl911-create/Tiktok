@@ -179,6 +179,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
             .le(CmMonitorTarget::getNextProfileCollectAt, now)
             .or()
             .le(CmMonitorTarget::getNextDiscoveryAt, now));
+        lqw.eq(LoginHelper.isLogin() && !canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId());
         lqw.orderByAsc(CmMonitorTarget::getNextContentCollectAt);
         lqw.last("limit " + Math.max(1, limit));
         int count = 0;
@@ -212,7 +213,9 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         try {
             CmMonitorTarget target = LoginHelper.isLogin()
                 ? monitorTargetMapper.selectScopedOne(
-                    Wrappers.<CmMonitorTarget>lambdaQuery().eq(CmMonitorTarget::getTargetId, targetId))
+                    Wrappers.<CmMonitorTarget>lambdaQuery()
+                        .eq(CmMonitorTarget::getTargetId, targetId)
+                        .eq(!canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId()))
                 : monitorTargetMapper.selectById(targetId);
             if (target == null) {
                 throw new ServiceException("monitor target not found or access denied.");
@@ -360,7 +363,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
     }
 
     private boolean canManageAllTargets() {
-        return LoginHelper.isSuperAdmin() || LoginHelper.isTenantAdmin();
+        return LoginHelper.isSuperAdmin();
     }
 
     private void markRelationsRemovedByTargetIds(Collection<Long> targetIds) {
@@ -909,6 +912,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         lqw.eq(CmMonitorTarget::getCreatorId, creatorId);
         lqw.eq(CmMonitorTarget::getTargetType, TARGET_CREATOR_COLLECTION);
         lqw.eq(CmMonitorTarget::getStatus, "active");
+        lqw.eq(!canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId());
         lqw.last("limit 1");
         return monitorTargetMapper.selectScopedOne(lqw);
     }

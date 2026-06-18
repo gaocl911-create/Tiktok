@@ -49,6 +49,9 @@ public class CmCreatorAccount extends TenantEntity {
     private String addedByName;
 
     @TableField(exist = false)
+    private Long ownerUserId;
+
+    @TableField(exist = false)
     private String contactWechat;
 
     @TableLogic

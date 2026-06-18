@@ -8,6 +8,7 @@ import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
+import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.creator.domain.*;
 import org.dromara.creator.mapper.*;
 import org.dromara.creator.service.ICreatorMonitorDataService;
@@ -38,7 +39,12 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
 
     @Override
     public CmCreatorAccount queryCreatorById(Long creatorId) {
-        return creatorAccountMapper.selectScopedById(creatorId);
+        CmCreatorAccount creator = creatorAccountMapper.selectScopedById(creatorId);
+        if (creator != null && !canViewAllCreatorAccounts()
+            && !LoginHelper.getUserId().equals(creator.getOwnerUserId())) {
+            return null;
+        }
+        return creator;
     }
 
     @Override
@@ -100,6 +106,9 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
 
     @Override
     public TableDataInfo<CmCreatorAccount> queryCreatorPage(CmCreatorAccount query, PageQuery pageQuery) {
+        if (!canViewAllCreatorAccounts()) {
+            query.setOwnerUserId(LoginHelper.getUserId());
+        }
         Page<CmCreatorAccount> page = creatorAccountMapper.selectScopedPage(pageQuery.build(), query);
         return TableDataInfo.build(page);
     }
@@ -268,6 +277,10 @@ public class CreatorMonitorDataServiceImpl implements ICreatorMonitorDataService
             throw new ServiceException("content not found or access denied.");
         }
         return content;
+    }
+
+    private boolean canViewAllCreatorAccounts() {
+        return LoginHelper.isSuperAdmin();
     }
 
     private int normalizedLimit(int limit, int defaultLimit, int maxLimit) {

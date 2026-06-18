@@ -18,6 +18,7 @@ export interface CreatorAccount {
   lastProfileCollectAt?: string;
   lastContentScanAt?: string;
   addedByName?: string;
+  ownerUserId?: string;
   contactWechat?: string;
 }
 

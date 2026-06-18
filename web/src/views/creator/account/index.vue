@@ -9,14 +9,22 @@
     </header>
 
     <section class="surface filter-bar">
-      <el-input v-model="query.nickname" clearable placeholder="搜索作者昵称" :prefix-icon="Search" @keyup.enter="loadData" />
-      <el-select v-model="query.profileStatus" clearable placeholder="全部状态">
+      <el-input v-model="query.nickname" clearable placeholder="搜索作者昵称" :prefix-icon="Search" @keyup.enter="handleQuery" />
+      <el-select v-model="query.ownerUserId" clearable placeholder="全部添加人" @change="handleQuery">
+        <el-option
+          v-for="item in addedByOptions"
+          :key="item.value"
+          :label="item.label"
+          :value="item.value"
+        />
+      </el-select>
+      <el-select v-model="query.profileStatus" clearable placeholder="全部状态" @change="handleQuery">
         <el-option label="数据完整" value="success" />
         <el-option label="部分数据" value="partial" />
         <el-option label="采集失败" value="failed" />
         <el-option label="等待采集" value="waiting_collect" />
       </el-select>
-      <el-button :icon="Search" @click="loadData">查询</el-button>
+      <el-button :icon="Search" @click="handleQuery">查询</el-button>
     </section>
 
     <section class="surface table-surface">
@@ -170,7 +178,8 @@ const selectedCreatorId = ref('');
 const rows = ref<CreatorAccount[]>([]);
 const total = ref(0);
 const formRef = ref<ElFormInstance>();
-const query = reactive({ pageNum: 1, pageSize: 10, platform: 'douyin', nickname: '', profileStatus: '' });
+const addedByOptions = ref<{ label: string; value: string }[]>([]);
+const query = reactive({ pageNum: 1, pageSize: 10, platform: 'douyin', nickname: '', ownerUserId: '', profileStatus: '' });
 const form = reactive<CreatorMonitorForm>({
   platform: 'douyin',
   profileInput: '',
@@ -211,15 +220,36 @@ const openWechatDialog = (row: CreatorAccount) => {
   wechatDialogVisible.value = true;
 };
 
+const queryParams = () => ({
+  ...query,
+  ownerUserId: query.ownerUserId || undefined
+});
+
+const loadAddedByOptions = async () => {
+  const res = await listCreatorAccounts({ pageNum: 1, pageSize: 1000, platform: 'douyin' });
+  const optionMap = new Map<string, string>();
+  for (const row of res.rows || []) {
+    if (row.ownerUserId && row.addedByName) {
+      optionMap.set(String(row.ownerUserId), row.addedByName);
+    }
+  }
+  addedByOptions.value = Array.from(optionMap, ([value, label]) => ({ value, label }));
+};
+
 const loadData = async () => {
   loading.value = true;
   try {
-    const res = await listCreatorAccounts(query);
+    const res = await listCreatorAccounts(queryParams());
     rows.value = res.rows || [];
     total.value = res.total || 0;
   } finally {
     loading.value = false;
   }
+};
+
+const handleQuery = () => {
+  query.pageNum = 1;
+  loadData();
 };
 
 const removeCreator = async (row: CreatorAccount) => {
@@ -232,6 +262,7 @@ const removeCreator = async (row: CreatorAccount) => {
   try {
     await deleteCreatorMonitors([row.creatorId]);
     ElMessage.success('已取消账号监控');
+    await loadAddedByOptions();
     await loadData();
   } finally {
     deletingId.value = '';
@@ -261,13 +292,17 @@ const submit = async () => {
     form.profileInput = '';
     form.remark = '';
     form.contactWechat = '';
+    await loadAddedByOptions();
     await loadData();
   } finally {
     submitting.value = false;
   }
 };
 
-onMounted(loadData);
+onMounted(() => {
+  loadAddedByOptions();
+  loadData();
+});
 </script>
 
 <style scoped>

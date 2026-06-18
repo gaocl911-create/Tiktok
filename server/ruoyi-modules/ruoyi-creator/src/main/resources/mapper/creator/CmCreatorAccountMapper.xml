@@ -15,6 +15,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectScopedPage" resultType="org.dromara.creator.domain.CmCreatorAccount">
         SELECT ca.*,
                COALESCE(NULLIF(su.nick_name, ''), su.user_name) AS added_by_name,
+               mt.owner_user_id AS owner_user_id,
                mt.contact_wechat AS contact_wechat
         <include refid="scopedCreatorFrom"/>
         LEFT JOIN sys_user su
@@ -36,6 +37,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="query.profileStatus != null and query.profileStatus != ''">
                 AND ca.profile_status = #{query.profileStatus}
             </if>
+            <if test="query.ownerUserId != null">
+                AND mt.owner_user_id = #{query.ownerUserId}
+            </if>
+            <if test="query.addedByName != null and query.addedByName != ''">
+                AND COALESCE(NULLIF(su.nick_name, ''), su.user_name) LIKE CONCAT('%', #{query.addedByName}, '%')
+            </if>
         </where>
         ORDER BY mt.update_time DESC, ca.update_time DESC
     </select>
@@ -43,10 +50,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectScopedById" resultType="org.dromara.creator.domain.CmCreatorAccount">
         SELECT ca.*,
                COALESCE(NULLIF(su.nick_name, ''), su.user_name) AS added_by_name,
+               mt.owner_user_id AS owner_user_id,
                mt.contact_wechat AS contact_wechat
         FROM cm_creator_account ca
         INNER JOIN cm_monitor_target mt
             ON mt.creator_id = ca.creator_id
+            AND mt.target_type = 'creator_collection'
             AND mt.status = 'active'
             AND mt.del_flag = '0'
         LEFT JOIN sys_user su
