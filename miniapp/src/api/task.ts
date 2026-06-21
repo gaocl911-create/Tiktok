@@ -5,7 +5,7 @@ export type ClaimStatus = "claimed" | "submitted" | "approved" | "rejected";
 export type SubmissionStatus = "pending" | "approved" | "rejected";
 
 export interface PromotionTask {
-  taskId: number;
+  taskId: number | string;
   taskTitle: string;
   platform: string;
   taskDesc?: string;
@@ -23,10 +23,10 @@ export interface PromotionTask {
 }
 
 export interface TaskClaim {
-  claimId: number;
-  taskId: number;
-  profileId: number;
-  userId: number;
+  claimId: number | string;
+  taskId: number | string;
+  profileId: number | string;
+  userId: number | string;
   claimStatus: ClaimStatus;
   claimTime?: string;
   submitTime?: string;
@@ -38,9 +38,9 @@ export interface TaskClaim {
 }
 
 export interface TaskSubmission {
-  submissionId: number;
-  claimId: number;
-  taskId: number;
+  submissionId: number | string;
+  claimId: number | string;
+  taskId: number | string;
   platform: string;
   contentUrl: string;
   contentDesc?: string;
@@ -48,9 +48,9 @@ export interface TaskSubmission {
   submissionStatus: SubmissionStatus;
   submitTime?: string;
   rejectReason?: string;
-  monitorContentId?: number;
-  monitorTargetId?: number;
-  monitorRunId?: number;
+  monitorContentId?: number | string;
+  monitorTargetId?: number | string;
+  monitorRunId?: number | string;
   taskTitle?: string;
 }
 
@@ -68,7 +68,7 @@ export const listPublishedTasks = (params: { pageNum: number; pageSize: number }
     data: params,
   });
 
-export const claimTask = (taskId: number) =>
+export const claimTask = (taskId: number | string) =>
   request<TaskClaim>({
     url: `/miniapp/task/${taskId}/claim`,
     method: "POST",
@@ -81,7 +81,7 @@ export const listMyTasks = (params: { pageNum: number; pageSize: number }) =>
     data: params,
   });
 
-export const submitTaskContent = (claimId: number, data: SubmitContentPayload) =>
+export const submitTaskContent = (claimId: number | string, data: SubmitContentPayload) =>
   request<TaskSubmission>({
     url: `/miniapp/task/claim/${claimId}/submit-content`,
     method: "POST",

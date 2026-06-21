@@ -49,7 +49,10 @@
         </el-table-column>
         <el-table-column label="作品链接" min-width="280" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-link type="primary" :href="row.contentUrl" target="_blank">{{ row.contentUrl }}</el-link>
+            <el-link v-if="extractWorkUrl(row.contentUrl)" type="primary" :href="extractWorkUrl(row.contentUrl)" target="_blank">
+              {{ extractWorkUrl(row.contentUrl) }}
+            </el-link>
+            <span v-else>{{ row.contentUrl || '--' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="说明" prop="contentDesc" min-width="180" show-overflow-tooltip>
@@ -151,6 +154,11 @@ const statusMeta = (status?: SubmissionStatus | string) => {
 };
 
 const formatTime = (value?: string) => (value ? proxy?.parseTime(value) || value : '--');
+
+const extractWorkUrl = (value?: string) => {
+  const match = String(value || '').match(/https?:\/\/[^\s"'<>，。；;、]+/i);
+  return match?.[0]?.replace(/[，。；;、）)\]】>]+$/, '') || '';
+};
 
 const getList = async () => {
   loading.value = true;

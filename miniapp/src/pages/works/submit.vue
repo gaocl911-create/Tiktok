@@ -56,7 +56,7 @@ import { reactive, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import { submitTaskContent } from "@/api/task";
 
-const claimId = ref(0);
+const claimId = ref("");
 const taskTitle = ref("");
 const platform = ref("");
 const submitting = ref(false);
@@ -76,6 +76,11 @@ const formatPlatform = (value?: string) => {
 };
 
 const submit = async () => {
+  if (!claimId.value) {
+    uni.showToast({ title: "领取记录不存在，请返回任务广场重新进入", icon: "none" });
+    return;
+  }
+
   if (!form.contentUrl.trim()) {
     uni.showToast({ title: "请填写作品链接", icon: "none" });
     return;
@@ -98,7 +103,7 @@ const submit = async () => {
 };
 
 onLoad((query) => {
-  claimId.value = Number(query?.claimId || 0);
+  claimId.value = String(query?.claimId || "");
   taskTitle.value = decodeURIComponent(String(query?.taskTitle || ""));
   platform.value = decodeURIComponent(String(query?.platform || ""));
 });

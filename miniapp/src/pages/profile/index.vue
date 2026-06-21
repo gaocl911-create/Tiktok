@@ -27,17 +27,6 @@
       </view>
     </view>
 
-    <view v-if="isLoggedIn" class="surface onboarding-card" @click="openProfileEdit">
-      <view>
-        <view class="onboarding-title">兼职资料</view>
-        <text class="onboarding-copy">{{ onboardingHint }}</text>
-      </view>
-      <view class="onboarding-side">
-        <text :class="['pill', onboardingTone]">{{ onboardingText }}</text>
-        <text class="arrow">›</text>
-      </view>
-    </view>
-
     <view v-if="!isLoggedIn" class="surface login-card">
       <view class="login-title">先完成小程序登录</view>
       <text class="login-copy">
@@ -136,8 +125,6 @@ const shortOpenid = computed(() => {
 });
 const loginTagText = computed(() => (isLoggedIn.value ? "已登录" : "待登录"));
 const onboardingText = computed(() => statusMap[currentStatus.value].text);
-const onboardingHint = computed(() => statusMap[currentStatus.value].hint);
-const onboardingTone = computed(() => statusMap[currentStatus.value].tone);
 
 const loadProfile = async () => {
   if (!isLoggedIn.value) {
@@ -314,34 +301,6 @@ onShow(loadProfile);
 .action-arrow {
   font-size: 30rpx;
   line-height: 1;
-}
-
-.onboarding-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 22rpx;
-  margin-top: 20rpx;
-  padding: 28rpx 30rpx;
-}
-
-.onboarding-title {
-  margin-bottom: 8rpx;
-  color: var(--cm-ink);
-  font-size: 32rpx;
-  font-weight: 900;
-}
-
-.onboarding-copy {
-  color: var(--cm-muted);
-  font-size: 24rpx;
-  line-height: 1.55;
-}
-
-.onboarding-side {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
 }
 
 .login-card {

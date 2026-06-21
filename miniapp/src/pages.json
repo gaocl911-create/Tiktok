@@ -53,19 +53,27 @@
     "list": [
       {
         "pagePath": "pages/index/index",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "static/tabbar/home.png",
+        "selectedIconPath": "static/tabbar/home-active.png"
       },
       {
         "pagePath": "pages/tasks/index",
-        "text": "任务"
+        "text": "任务",
+        "iconPath": "static/tabbar/tasks.png",
+        "selectedIconPath": "static/tabbar/tasks-active.png"
       },
       {
         "pagePath": "pages/works/index",
-        "text": "作品"
+        "text": "作品",
+        "iconPath": "static/tabbar/works.png",
+        "selectedIconPath": "static/tabbar/works-active.png"
       },
       {
         "pagePath": "pages/profile/index",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "static/tabbar/profile.png",
+        "selectedIconPath": "static/tabbar/profile-active.png"
       }
     ]
   },

@@ -31,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @RequiredArgsConstructor
 @Service
@@ -45,6 +47,7 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
     private static final String SUBMISSION_PENDING = "pending";
     private static final String SUBMISSION_APPROVED = "approved";
     private static final String SUBMISSION_REJECTED = "rejected";
+    private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
 
     private final PtPromotionTaskMapper ptPromotionTaskMapper;
     private final PtStaffProfileMapper ptStaffProfileMapper;
@@ -134,6 +137,7 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         if (!TASK_PUBLISHED.equals(task.getTaskStatus())) {
             throw new ServiceException("任务当前不可提交");
         }
+        String contentUrl = normalizeContentUrl(bo.getContentUrl());
         Date now = new Date();
         PtTaskSubmission submission = new PtTaskSubmission();
         submission.setTenantId(LoginHelper.getTenantId());
@@ -142,7 +146,7 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         submission.setProfileId(claim.getProfileId());
         submission.setUserId(claim.getUserId());
         submission.setPlatform(defaultPlatform(task.getPlatform()));
-        submission.setContentUrl(bo.getContentUrl());
+        submission.setContentUrl(contentUrl);
         submission.setContentDesc(bo.getContentDesc());
         submission.setScreenshotUrl(bo.getScreenshotUrl());
         submission.setSubmissionStatus(SUBMISSION_PENDING);
@@ -343,5 +347,21 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
 
     private String defaultPlatform(String platform) {
         return StringUtils.isBlank(platform) ? "douyin" : platform;
+    }
+
+    private String normalizeContentUrl(String input) {
+        String value = input == null ? "" : input.trim();
+        if (StringUtils.isBlank(value)) {
+            throw new ServiceException("作品链接不能为空");
+        }
+        Matcher matcher = URL_PATTERN.matcher(value);
+        if (matcher.find()) {
+            return trimUrl(matcher.group());
+        }
+        return value;
+    }
+
+    private String trimUrl(String url) {
+        return url.replaceAll("[，。；、）)\\]】>]+$", "");
     }
 }

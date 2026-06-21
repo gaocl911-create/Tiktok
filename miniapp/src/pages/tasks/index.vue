@@ -59,7 +59,7 @@
       <wd-button
         block
         :plain="taskButtonPlain(task)"
-        :loading="claimingTaskId === task.taskId"
+        :loading="claimingTaskId === idKey(task.taskId)"
         @click="handleTaskAction(task)"
       >
         {{ taskButtonText(task) }}
@@ -85,17 +85,19 @@ import { hasToken } from "@/utils/request";
 const tasks = ref<PromotionTask[]>([]);
 const myClaims = ref<TaskClaim[]>([]);
 const loading = ref(false);
-const claimingTaskId = ref<number | null>(null);
+const claimingTaskId = ref<string | null>(null);
 const needLogin = ref(!hasToken());
 const profileStatus = ref<OnboardingStatus>("incomplete");
 const pageNum = ref(1);
 const pageSize = 10;
 const total = ref(0);
 
+const idKey = (value?: number | string) => String(value ?? "");
+
 const claimByTaskId = computed(() => {
-  const map = new Map<number, TaskClaim>();
+  const map = new Map<string, TaskClaim>();
   myClaims.value.forEach((claim) => {
-    map.set(claim.taskId, claim);
+    map.set(idKey(claim.taskId), claim);
   });
   return map;
 });
@@ -122,7 +124,7 @@ const qualificationHint = computed(() => {
 
 const qualificationButton = computed(() => (profileStatus.value === "pending" ? "查看资料" : "去完善"));
 
-const getClaim = (task: PromotionTask) => claimByTaskId.value.get(task.taskId);
+const getClaim = (task: PromotionTask) => claimByTaskId.value.get(idKey(task.taskId));
 
 const canSubmit = (status?: ClaimStatus) => status === "claimed" || status === "rejected";
 
@@ -216,7 +218,7 @@ const refresh = () => loadTasks(true);
 
 const openSubmit = (claim: TaskClaim) => {
   uni.navigateTo({
-    url: `/pages/works/submit?claimId=${claim.claimId}&taskTitle=${encodeURIComponent(
+    url: `/pages/works/submit?claimId=${encodeURIComponent(String(claim.claimId))}&taskTitle=${encodeURIComponent(
       claim.taskTitle || "",
     )}&platform=${encodeURIComponent(claim.platform || "")}`,
   });
@@ -243,10 +245,10 @@ const handleTaskAction = async (task: PromotionTask) => {
     return;
   }
 
-  claimingTaskId.value = task.taskId;
+  claimingTaskId.value = idKey(task.taskId);
   try {
     const claim = await claimTask(task.taskId);
-    myClaims.value = [claim, ...myClaims.value.filter((item) => item.taskId !== task.taskId)];
+    myClaims.value = [claim, ...myClaims.value.filter((item) => idKey(item.taskId) !== idKey(task.taskId))];
     uni.showToast({ title: "领取成功", icon: "success" });
     setTimeout(() => {
       openSubmit(claim);

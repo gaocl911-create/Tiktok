@@ -181,7 +181,7 @@ const openProfile = () => {
 
 const openSubmit = (claim: TaskClaim) => {
   uni.navigateTo({
-    url: `/pages/works/submit?claimId=${claim.claimId}&taskTitle=${encodeURIComponent(
+    url: `/pages/works/submit?claimId=${encodeURIComponent(String(claim.claimId))}&taskTitle=${encodeURIComponent(
       claim.taskTitle || "",
     )}&platform=${encodeURIComponent(claim.platform || "")}`,
   });
