@@ -52,6 +52,12 @@ public class CmCreatorAccount extends TenantEntity {
     private Long ownerUserId;
 
     @TableField(exist = false)
+    private Long targetId;
+
+    @TableField(exist = false)
+    private Boolean discoverNewContent;
+
+    @TableField(exist = false)
     private String contactWechat;
 
     @TableLogic

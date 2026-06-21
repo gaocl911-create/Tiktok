@@ -124,7 +124,7 @@
 
 <script setup lang="ts">
 import { Refresh, VideoCamera } from '@element-plus/icons-vue';
-import { collectCreatorProfile, collectTarget, getCreatorAccount, listContentPosts, listMonitorTargets } from '@/api/creator';
+import { collectCreatorProfile, getCreatorAccount, listContentPosts, listMonitorTargets } from '@/api/creator';
 import type { ContentPost, CreatorAccount, MonitorTarget } from '@/api/creator/types';
 import StatusBadge from './StatusBadge.vue';
 
@@ -190,15 +190,10 @@ const refreshProfile = async () => {
   if (!props.creatorId) return;
   refreshing.value = true;
   try {
-    const refreshesContent = target.value?.targetType === 'creator_collection' && target.value.targetId;
-    if (refreshesContent) {
-      await collectTarget(String(target.value!.targetId));
-    } else {
-      await collectCreatorProfile(props.creatorId);
-    }
+    await collectCreatorProfile(props.creatorId);
     await loadDetail();
     emit('refreshed');
-    ElMessage.success(refreshesContent ? '作者及作品数据已刷新' : '作者主页数据已刷新');
+    ElMessage.success('作者主页数据已刷新');
   } finally {
     refreshing.value = false;
   }

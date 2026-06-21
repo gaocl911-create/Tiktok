@@ -33,6 +33,14 @@ public interface ICreatorMonitorCommandService {
     void updateCreatorContactWechat(Long creatorId, String contactWechat);
 
     /**
+     * Update whether scheduled jobs should discover new posts from this creator homepage.
+     *
+     * @param creatorId creator id whose monitor target should be updated
+     * @param discoverNewContent true to discover homepage posts automatically
+     */
+    void updateCreatorDiscoverNewContent(Long creatorId, Boolean discoverNewContent);
+
+    /**
      * Cancel the current user's creator monitoring targets.
      * Shared creator data, content, snapshots, runs and alert history are preserved.
      *

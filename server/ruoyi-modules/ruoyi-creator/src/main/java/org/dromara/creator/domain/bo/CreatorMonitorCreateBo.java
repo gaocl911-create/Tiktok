@@ -20,6 +20,7 @@ public class CreatorMonitorCreateBo {
     private String remark;
     private String contactWechat;
     private String tags;
+    private Boolean discoverNewContent = false;
 
     private Long ownerUserId;
     private Long ownerDeptId;

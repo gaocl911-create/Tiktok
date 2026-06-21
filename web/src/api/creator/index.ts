@@ -46,6 +46,13 @@ export const updateCreatorContactWechat = (creatorId: string, contactWechat: str
     data: { contactWechat }
   });
 
+export const updateCreatorDiscoverNewContent = (creatorId: string, discoverNewContent: boolean) =>
+  request({
+    url: `/creator/account/${creatorId}/discover-new-content`,
+    method: 'put',
+    params: { discoverNewContent }
+  });
+
 export const deleteCreatorMonitors = (creatorIds: string[]) =>
   request({
     url: `/creator/account/${creatorIds.join(',')}`,

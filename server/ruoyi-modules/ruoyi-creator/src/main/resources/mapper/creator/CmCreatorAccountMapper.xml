@@ -16,6 +16,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         SELECT ca.*,
                COALESCE(NULLIF(su.nick_name, ''), su.user_name) AS added_by_name,
                mt.owner_user_id AS owner_user_id,
+               mt.target_id AS target_id,
+               mt.discover_new_content AS discover_new_content,
                mt.contact_wechat AS contact_wechat
         <include refid="scopedCreatorFrom"/>
         LEFT JOIN sys_user su
@@ -51,6 +53,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         SELECT ca.*,
                COALESCE(NULLIF(su.nick_name, ''), su.user_name) AS added_by_name,
                mt.owner_user_id AS owner_user_id,
+               mt.target_id AS target_id,
+               mt.discover_new_content AS discover_new_content,
                mt.contact_wechat AS contact_wechat
         FROM cm_creator_account ca
         INNER JOIN cm_monitor_target mt

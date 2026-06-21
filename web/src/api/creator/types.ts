@@ -19,6 +19,8 @@ export interface CreatorAccount {
   lastContentScanAt?: string;
   addedByName?: string;
   ownerUserId?: string;
+  targetId?: string;
+  discoverNewContent?: boolean;
   contactWechat?: string;
 }
 
@@ -109,6 +111,7 @@ export interface CreatorMonitorForm {
   remark?: string;
   contactWechat?: string;
   tags?: string;
+  discoverNewContent?: boolean;
   profileCollectIntervalMin?: number;
   contentCollectIntervalMin?: number;
 }

@@ -3,7 +3,7 @@
     <header class="page-heading">
       <div>
         <h1>账号监测</h1>
-        <p>管理抖音作者主页，并自动发现添加监控后的新作品。</p>
+        <p>管理抖音作者主页；默认只刷新作者资料，是否自动发现作品由你手动控制。</p>
       </div>
       <el-button v-hasPermi="['creator:account:add']" type="primary" :icon="Plus" @click="dialogVisible = true">添加账号</el-button>
     </header>
@@ -79,9 +79,31 @@
         <el-table-column label="最近采集" width="180">
           <template #default="{ row }">{{ formatTime(row.lastProfileCollectAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column label="自动发现作品" width="150" align="center">
+          <template #default="{ row }">
+            <el-tooltip content="开启后，定时任务会从作者主页发现并加入新作品；关闭后只刷新已监控作品的数据。">
+              <el-switch
+                :model-value="isDiscoverEnabled(row)"
+                :loading="switchingId === row.creatorId"
+                @change="(value) => changeDiscover(row, Boolean(value))"
+              />
+            </el-tooltip>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openCreator(row.creatorId)">查看</el-button>
+            <el-button
+              v-hasPermi="['creator:target:collect']"
+              link
+              type="primary"
+              :icon="Refresh"
+              :loading="syncingId === row.creatorId"
+              :disabled="!row.targetId"
+              @click="syncCreatorContents(row)"
+            >
+              同步作品
+            </el-button>
             <el-button
               v-hasPermi="['creator:account:remove']"
               link
@@ -113,6 +135,14 @@
         </el-form-item>
         <el-form-item label="添加人微信号">
           <el-input v-model="form.contactWechat" clearable placeholder="填写添加这个账号的微信号" />
+        </el-form-item>
+        <el-form-item label="自动发现作者新作品">
+          <el-switch
+            v-model="form.discoverNewContent"
+            active-text="开启"
+            inactive-text="关闭"
+          />
+          <p class="form-tip">建议默认关闭。开启后，定时任务会从作者主页自动加入新作品。</p>
         </el-form-item>
         <div class="form-grid">
           <el-form-item label="主页刷新频率">
@@ -160,8 +190,15 @@
 </template>
 
 <script setup lang="ts">
-import { Edit, Plus, Search } from '@element-plus/icons-vue';
-import { addCreatorMonitor, deleteCreatorMonitors, listCreatorAccounts, updateCreatorContactWechat } from '@/api/creator';
+import { Edit, Plus, Refresh, Search } from '@element-plus/icons-vue';
+import {
+  addCreatorMonitor,
+  collectTarget,
+  deleteCreatorMonitors,
+  listCreatorAccounts,
+  updateCreatorContactWechat,
+  updateCreatorDiscoverNewContent
+} from '@/api/creator';
 import type { CreatorAccount, CreatorMonitorForm } from '@/api/creator/types';
 import CreatorDetailDrawer from '../components/CreatorDetailDrawer.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -171,6 +208,8 @@ const loading = ref(false);
 const submitting = ref(false);
 const wechatSubmitting = ref(false);
 const deletingId = ref('');
+const syncingId = ref('');
+const switchingId = ref('');
 const dialogVisible = ref(false);
 const wechatDialogVisible = ref(false);
 const creatorDrawerVisible = ref(false);
@@ -185,6 +224,7 @@ const form = reactive<CreatorMonitorForm>({
   profileInput: '',
   remark: '',
   contactWechat: '',
+  discoverNewContent: false,
   profileCollectIntervalMin: 360,
   contentCollectIntervalMin: 30
 });
@@ -199,6 +239,7 @@ const rules: ElFormRules = {
 
 const formatNumber = (value?: number) => new Intl.NumberFormat('zh-CN').format(value || 0);
 const formatTime = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '尚未采集';
+const isDiscoverEnabled = (row: CreatorAccount) => row.discoverNewContent === true;
 const displayAccountId = (row: CreatorAccount) => {
   const candidates = [row.platformDisplayId, row.platformUserId, row.platformCreatorId];
   return candidates.find((value) => value && value !== '0') || '--';
@@ -252,6 +293,41 @@ const handleQuery = () => {
   loadData();
 };
 
+const changeDiscover = async (row: CreatorAccount, enabled: boolean) => {
+  const previous = row.discoverNewContent;
+  row.discoverNewContent = enabled;
+  switchingId.value = row.creatorId;
+  try {
+    await updateCreatorDiscoverNewContent(row.creatorId, enabled);
+    ElMessage.success(enabled ? '已开启自动发现作品' : '已关闭自动发现作品');
+  } catch (error) {
+    row.discoverNewContent = previous;
+    throw error;
+  } finally {
+    switchingId.value = '';
+  }
+};
+
+const syncCreatorContents = async (row: CreatorAccount) => {
+  if (!row.targetId) {
+    ElMessage.warning('没有找到该账号的监控目标，无法同步作品');
+    return;
+  }
+  await ElMessageBox.confirm(
+    `将立即从“${row.nickname || '该作者'}”主页同步一次作品，可能会消耗接口额度。是否继续？`,
+    '同步作者作品',
+    { type: 'warning', confirmButtonText: '同步作品', cancelButtonText: '取消' }
+  );
+  syncingId.value = row.creatorId;
+  try {
+    await collectTarget(String(row.targetId));
+    ElMessage.success('作者作品已同步');
+    await loadData();
+  } finally {
+    syncingId.value = '';
+  }
+};
+
 const removeCreator = async (row: CreatorAccount) => {
   await ElMessageBox.confirm(
     `确定取消对“${row.nickname || '该作者'}”的账号监控吗？已采集的作者、作品及历史数据都会保留。`,
@@ -292,6 +368,7 @@ const submit = async () => {
     form.profileInput = '';
     form.remark = '';
     form.contactWechat = '';
+    form.discoverNewContent = false;
     await loadAddedByOptions();
     await loadData();
   } finally {
@@ -330,5 +407,12 @@ onMounted(() => {
 .avatar-link:focus-visible {
   outline: 2px solid var(--el-color-primary);
   outline-offset: 2px;
+}
+
+.form-tip {
+  margin: 6px 0 0;
+  color: #737373;
+  font-size: 12px;
+  line-height: 18px;
 }
 </style>

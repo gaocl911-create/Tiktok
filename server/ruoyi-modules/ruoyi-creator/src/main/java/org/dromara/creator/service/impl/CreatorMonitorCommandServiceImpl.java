@@ -324,6 +324,27 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void updateCreatorDiscoverNewContent(Long creatorId, Boolean discoverNewContent) {
+        if (creatorId == null) {
+            throw new ServiceException("creatorId is required.");
+        }
+        CmMonitorTarget target = findEditableCreatorTarget(creatorId);
+        if (target == null) {
+            throw new ServiceException("未找到可修改的账号监控，或当前用户无权操作");
+        }
+        Date now = new Date();
+        boolean enabled = Boolean.TRUE.equals(discoverNewContent);
+        monitorTargetMapper.update(null,
+            Wrappers.<CmMonitorTarget>lambdaUpdate()
+                .eq(CmMonitorTarget::getTargetId, target.getTargetId())
+                .set(CmMonitorTarget::getDiscoverNewContent, enabled)
+                .set(CmMonitorTarget::getNextDiscoveryAt, enabled ? now : null)
+                .set(CmMonitorTarget::getUpdateBy, LoginHelper.getUserId())
+                .set(CmMonitorTarget::getUpdateTime, now));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteCreators(Collection<Long> creatorIds) {
         if (creatorIds == null || creatorIds.isEmpty()) {
             return;
@@ -394,14 +415,29 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
     private int collectCreatorCollection(CmMonitorTarget target, CmCreatorAccount creator, TikHubClient client,
                                          boolean forceCollect) {
         Date now = new Date();
+        boolean profileCollected = false;
         if (forceCollect || target.getNextProfileCollectAt() == null || !target.getNextProfileCollectAt().after(now)) {
             TikHubCreatorProfile profile = tikHubDouyinMapper.mapCreator(client.getProfile(creator.getPlatformCreatorId()), creator.getPlatformCreatorId());
             upsertCreator(creator, creator.getPlatform(), profile);
             saveCreatorSnapshot(creator, target.getTargetId(), profile);
             target.setLastProfileCollectAt(now);
             target.setNextProfileCollectAt(addMinutes(now, target.getProfileCollectIntervalMin()));
+            profileCollected = true;
         }
         if (!forceCollect && target.getNextDiscoveryAt() != null && target.getNextDiscoveryAt().after(now)) {
+            if (profileCollected) {
+                monitorTargetMapper.updateById(target);
+            }
+            return 0;
+        }
+        if (!forceCollect && !Boolean.TRUE.equals(target.getDiscoverNewContent())) {
+            monitorTargetMapper.update(null,
+                Wrappers.<CmMonitorTarget>lambdaUpdate()
+                    .eq(CmMonitorTarget::getTargetId, target.getTargetId())
+                    .set(profileCollected, CmMonitorTarget::getLastProfileCollectAt, target.getLastProfileCollectAt())
+                    .set(profileCollected, CmMonitorTarget::getNextProfileCollectAt, target.getNextProfileCollectAt())
+                    .set(CmMonitorTarget::getNextDiscoveryAt, null)
+                    .set(CmMonitorTarget::getUpdateTime, now));
             return 0;
         }
         List<TikHubContentProfile> profiles = tikHubDouyinMapper.mapContentList(client.getUserPosts(creator.getPlatformCreatorId()));
@@ -567,9 +603,9 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
             target.setPlatform(creator.getPlatform());
             target.setCreatorId(creator.getCreatorId());
             target.setBaselineTime(now);
-            target.setDiscoverNewContent(true);
             target.setStatus("active");
         }
+        target.setDiscoverNewContent(Boolean.TRUE.equals(bo.getDiscoverNewContent()));
         target.setTargetName(defaultText(bo.getTargetName(), creator.getNickname()));
         applyOwner(target, bo.getOwnerUserId(), bo.getOwnerDeptId(), bo.getDirectSuperiorUserId());
         target.setProfileCollectIntervalMin(defaultInt(bo.getProfileCollectIntervalMin(), 360));
@@ -577,7 +613,9 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         target.setLastProfileCollectAt(now);
         target.setNextProfileCollectAt(addMinutes(now, target.getProfileCollectIntervalMin()));
         target.setNextContentCollectAt(addMinutes(now, target.getContentCollectIntervalMin()));
-        target.setNextDiscoveryAt(addMinutes(now, target.getContentCollectIntervalMin()));
+        target.setNextDiscoveryAt(Boolean.TRUE.equals(target.getDiscoverNewContent())
+            ? addMinutes(now, target.getContentCollectIntervalMin())
+            : null);
         target.setDataStatus("waiting_new_content");
         target.setRemark(bo.getRemark());
         target.setContactWechat(bo.getContactWechat());

@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -80,6 +81,19 @@ public class CreatorAccountController {
         @RequestBody CreatorContactWechatBo bo
     ) {
         creatorMonitorCommandService.updateCreatorContactWechat(creatorId, bo == null ? null : bo.getContactWechat());
+        return R.ok();
+    }
+
+    /**
+     * Update whether scheduled jobs should discover new posts from this creator homepage.
+     */
+    @SaCheckPermission("creator:account:edit")
+    @PutMapping("/{creatorId}/discover-new-content")
+    public R<Void> updateDiscoverNewContent(
+        @NotNull(message = "creatorId is required") @PathVariable Long creatorId,
+        @RequestParam(defaultValue = "false") Boolean discoverNewContent
+    ) {
+        creatorMonitorCommandService.updateCreatorDiscoverNewContent(creatorId, discoverNewContent);
         return R.ok();
     }
 
