@@ -197,7 +197,7 @@ public class CreatorAlertServiceImpl implements ICreatorAlertService {
 
     private boolean shouldTrigger(CmAlertRule rule, Evaluation evaluation, CmAlertEvent latest) {
         if (RULE_CUMULATIVE.equals(rule.getRuleType())) {
-            BigInteger baseline = isHandledEvent(latest) && latest.getObservedValue() != null
+            BigInteger baseline = latest != null && latest.getObservedValue() != null
                 ? latest.getObservedValue()
                 : BigInteger.ZERO;
             return evaluation.observed().subtract(baseline).max(BigInteger.ZERO)
@@ -219,7 +219,9 @@ public class CreatorAlertServiceImpl implements ICreatorAlertService {
     private void createOrUpdateEvent(CmAlertRule rule, CmContentPost content, CmContentSnapshot snapshot,
                                      Evaluation evaluation, CmAlertEvent latest) {
         Date now = snapshot.getCollectedAt();
-        if (latest != null && ("pending".equals(latest.getStatus()) || "tracking".equals(latest.getStatus()))) {
+        if (!RULE_CUMULATIVE.equals(rule.getRuleType())
+            && latest != null
+            && ("pending".equals(latest.getStatus()) || "tracking".equals(latest.getStatus()))) {
             latest.setObservedValue(evaluation.observed());
             latest.setSnapshotId(snapshot.getSnapshotId());
             latest.setTargetId(snapshot.getTargetId());
@@ -231,7 +233,8 @@ public class CreatorAlertServiceImpl implements ICreatorAlertService {
             return;
         }
         int cooldown = rule.getCooldownMinutes() == null ? 0 : rule.getCooldownMinutes();
-        if (latest != null && latest.getLastTriggeredAt() != null
+        if (!RULE_CUMULATIVE.equals(rule.getRuleType())
+            && latest != null && latest.getLastTriggeredAt() != null
             && latest.getLastTriggeredAt().getTime() + cooldown * 60_000L > now.getTime()) {
             return;
         }

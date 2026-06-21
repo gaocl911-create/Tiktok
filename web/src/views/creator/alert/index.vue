@@ -93,8 +93,8 @@
             <el-table-column label="预警内容" min-width="320">
               <template #default="{ row }">
                 <button class="event-title" type="button" @click="openContentDetail(row.contentId)">
-                  <strong>{{ row.eventTitle }}</strong>
-                  <span>{{ row.contentTitle || `作品 ${row.contentId}` }}</span>
+                  <strong>{{ eventDisplayTitle(row) }}</strong>
+                  <span>{{ eventDisplayDescription(row) }}</span>
                 </button>
               </template>
             </el-table-column>
@@ -357,10 +357,21 @@ const severityLabel = (value: string) => ({ normal: '普通', important: '重要
 const statusLabel = (value: string) => ({ pending: '待处理', tracking: '跟踪中', resolved: '已处理', ignored: '已忽略' }[value] || value);
 const conditionText = (row: AlertEvent) => row.ruleType === 'window_growth'
   ? `${row.windowMinutes} 分钟增长 ≥ ${formatNumber(row.thresholdValue)}`
-  : `累计数量 ≥ ${formatNumber(row.thresholdValue)}`;
+  : `首次达到 ${formatNumber(row.thresholdValue)}，后续每新增 ${formatNumber(row.thresholdValue)} 再提醒`;
+const eventDisplayTitle = (row: AlertEvent) => row.ruleType === 'cumulative'
+  ? `${metricLabel(row.metricType)}累计达到 ${formatNumber(row.observedValue)}`
+  : row.eventTitle;
+const eventDisplayDescription = (row: AlertEvent) => {
+  const contentTitle = row.contentTitle || `作品 ${row.contentId}`;
+  if (row.ruleType !== 'cumulative') {
+    return contentTitle;
+  }
+  const nextValue = Number(row.observedValue || 0) + Number(row.thresholdValue || 0);
+  return `${contentTitle} · 下次达到 ${formatNumber(nextValue)} 再提醒`;
+};
 const ruleConditionText = (row: AlertRule) => `${metricLabel(row.metricType)}${row.ruleType === 'window_growth'
   ? `在 ${row.windowMinutes} 分钟内增长 ≥ ${formatNumber(row.thresholdValue)}`
-  : `累计达到 ${formatNumber(row.thresholdValue)}`}`;
+  : `首次达到 ${formatNumber(row.thresholdValue)}，后续每新增 ${formatNumber(row.thresholdValue)} 再提醒`}`;
 const scopeLabel = (row: AlertRule) => row.scopeType === 'all'
   ? '全部作品'
   : row.scopeType === 'creator'
