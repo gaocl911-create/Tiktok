@@ -369,18 +369,49 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         if (contentIds == null || contentIds.isEmpty()) {
             return;
         }
+        List<Long> scopedContentIds = contentIds.stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        if (scopedContentIds.isEmpty()) {
+            return;
+        }
         List<Long> singleTargetIds = monitorTargetMapper.selectList(
             Wrappers.<CmMonitorTarget>lambdaQuery()
                 .eq(CmMonitorTarget::getTargetType, TARGET_SINGLE_CONTENT)
-                .in(CmMonitorTarget::getContentId, contentIds)
+                .in(CmMonitorTarget::getContentId, scopedContentIds)
                 .eq(CmMonitorTarget::getStatus, "active")
                 .eq(!canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId())
         ).stream().map(CmMonitorTarget::getTargetId).toList();
-        if (singleTargetIds.isEmpty()) {
+
+        List<Long> boundTargetIds = targetContentMapper.selectList(
+            Wrappers.<CmMonitorTargetContent>lambdaQuery()
+                .select(CmMonitorTargetContent::getTargetId)
+                .in(CmMonitorTargetContent::getContentId, scopedContentIds)
+                .eq(CmMonitorTargetContent::getStatus, "active")
+        ).stream()
+            .map(CmMonitorTargetContent::getTargetId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+
+        List<Long> creatorTargetIds = boundTargetIds.isEmpty() ? List.of() : monitorTargetMapper.selectList(
+            Wrappers.<CmMonitorTarget>lambdaQuery()
+                .select(CmMonitorTarget::getTargetId)
+                .in(CmMonitorTarget::getTargetId, boundTargetIds)
+                .eq(CmMonitorTarget::getTargetType, TARGET_CREATOR_COLLECTION)
+                .eq(CmMonitorTarget::getStatus, "active")
+                .eq(!canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId())
+        ).stream().map(CmMonitorTarget::getTargetId).toList();
+
+        int removedCreatorRelations = markRelationsRemovedByTargetIdsAndContentIds(creatorTargetIds, scopedContentIds);
+        if (!singleTargetIds.isEmpty()) {
+            markRelationsRemovedByTargetIds(singleTargetIds);
+            markTargetsRemoved(singleTargetIds);
+        }
+        if (singleTargetIds.isEmpty() && removedCreatorRelations <= 0) {
             throw new ServiceException("未找到可取消的作品监控，或当前用户无权操作");
         }
-        markRelationsRemovedByTargetIds(singleTargetIds);
-        markTargetsRemoved(singleTargetIds);
     }
 
     private boolean canManageAllTargets() {
@@ -396,6 +427,19 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         targetContentMapper.update(update,
             Wrappers.<CmMonitorTargetContent>lambdaUpdate()
                 .in(CmMonitorTargetContent::getTargetId, targetIds)
+                .eq(CmMonitorTargetContent::getStatus, "active"));
+    }
+
+    private int markRelationsRemovedByTargetIdsAndContentIds(Collection<Long> targetIds, Collection<Long> contentIds) {
+        if (targetIds.isEmpty() || contentIds.isEmpty()) {
+            return 0;
+        }
+        CmMonitorTargetContent update = new CmMonitorTargetContent();
+        update.setStatus("removed");
+        return targetContentMapper.update(update,
+            Wrappers.<CmMonitorTargetContent>lambdaUpdate()
+                .in(CmMonitorTargetContent::getTargetId, targetIds)
+                .in(CmMonitorTargetContent::getContentId, contentIds)
                 .eq(CmMonitorTargetContent::getStatus, "active"));
     }
 

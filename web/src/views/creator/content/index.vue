@@ -261,14 +261,14 @@ const batchCollect = async () => {
 
 const removeContent = async (row: ContentPost) => {
   await ElMessageBox.confirm(
-    `确定取消对“${titleText(row)}”的作品监控吗？作品和全部历史快照都会保留。`,
-    '取消作品监控',
-    { type: 'warning', confirmButtonText: '取消监控', cancelButtonText: '返回' }
+    `确定取消对“${titleText(row)}”的作品监控吗？只会解除当前监控关系，作品数据和历史快照都会保留。`,
+    '取消作品监控关系',
+    { type: 'warning', confirmButtonText: '解除关系', cancelButtonText: '返回' }
   );
   deletingId.value = row.contentId;
   try {
     await deleteContentMonitors([row.contentId]);
-    ElMessage.success('已取消作品监控');
+    ElMessage.success('已取消作品监控关系');
     await loadData();
   } finally {
     deletingId.value = '';
