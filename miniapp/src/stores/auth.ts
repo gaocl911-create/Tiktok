@@ -1,9 +1,10 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { miniappLogin } from "@/api/auth";
+import { AUTH_LOGOUT_EVENT, OPENID_KEY, TOKEN_KEY } from "@/utils/request";
 
-const TOKEN_KEY = "creator-miniapp-token";
-const OPENID_KEY = "creator-miniapp-openid";
+const MOCK_OPENID_KEY = "creator-miniapp-mock-openid";
+const DEFAULT_MOCK_OPENID = "dev_local_user";
 
 export const useAuthStore = defineStore("auth", () => {
   const token = ref<string>(uni.getStorageSync(TOKEN_KEY) || "");
@@ -37,7 +38,11 @@ export const useAuthStore = defineStore("auth", () => {
   };
 
   const loginByMock = async () => {
-    const mockOpenid = `dev_${Date.now()}`;
+    let mockOpenid = uni.getStorageSync(MOCK_OPENID_KEY) as string;
+    if (!mockOpenid) {
+      mockOpenid = DEFAULT_MOCK_OPENID;
+      uni.setStorageSync(MOCK_OPENID_KEY, mockOpenid);
+    }
     const result = await miniappLogin({ mockOpenid });
     setSession({ token: result.access_token, openid: result.openid });
     return result;
@@ -49,6 +54,13 @@ export const useAuthStore = defineStore("auth", () => {
     uni.removeStorageSync(TOKEN_KEY);
     uni.removeStorageSync(OPENID_KEY);
   };
+
+  // request.ts 在收到 401 时会广播这个事件，store 也要同步把内存里的 ref 清掉，
+  // 否则页面通过 storeToRefs 拿到的 isLoggedIn 不会变。
+  uni.$on(AUTH_LOGOUT_EVENT, () => {
+    token.value = "";
+    openid.value = "";
+  });
 
   return {
     token,

@@ -104,6 +104,7 @@ import {
   type OnboardingStatus,
   type StaffProfile,
 } from "@/api/profile";
+import { hasToken } from "@/utils/request";
 
 const profile = ref<StaffProfile>({});
 const saving = ref(false);
@@ -161,10 +162,16 @@ const loadProfile = async () => {
     profile.value = data || {};
     fillForm(profile.value);
   } catch {
-    uni.showToast({ title: "请先登录", icon: "none" });
-    setTimeout(() => {
-      uni.switchTab({ url: "/pages/profile/index" });
-    }, 500);
+    // 区分"未登录"和"接口报错"：没有 token 才跳回登录页，
+    // 否则保留页面只提示加载失败
+    if (!hasToken()) {
+      uni.showToast({ title: "请先登录", icon: "none" });
+      setTimeout(() => {
+        uni.switchTab({ url: "/pages/profile/index" });
+      }, 500);
+    } else {
+      uni.showToast({ title: "资料加载失败，请稍后重试", icon: "none" });
+    }
   }
 };
 

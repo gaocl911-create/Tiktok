@@ -67,6 +67,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { storeToRefs } from "pinia";
 import { getMyProfile, type OnboardingStatus, type StaffProfile } from "@/api/profile";
 import { useAuthStore } from "@/stores/auth";
+import { hasToken } from "@/utils/request";
 
 interface MenuItem {
   label: string;
@@ -134,8 +135,11 @@ const loadProfile = async () => {
   try {
     profile.value = await getMyProfile(false);
   } catch {
-    authStore.clearSession();
-    profile.value = {};
+    if (!hasToken()) {
+      profile.value = {};
+      return;
+    }
+    uni.showToast({ title: "资料加载失败，请稍后重试", icon: "none" });
   }
 };
 

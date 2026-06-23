@@ -110,6 +110,14 @@ const loadClaims = async (reset = false) => {
     const page = await listMyTasks({ pageNum: pageNum.value, pageSize });
     total.value = page.total || 0;
     claims.value = reset ? page.rows || [] : [...claims.value, ...(page.rows || [])];
+  } catch {
+    // 接口失败时回退到登录态判定，避免把"token 过期"展示成"空作品列表"
+    needLogin.value = !hasToken();
+    if (needLogin.value) {
+      if (reset) claims.value = [];
+      return;
+    }
+    uni.showToast({ title: "作品列表加载失败，请稍后重试", icon: "none" });
   } finally {
     loading.value = false;
     uni.stopPullDownRefresh();

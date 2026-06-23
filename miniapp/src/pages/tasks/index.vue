@@ -194,7 +194,13 @@ const loadTasks = async (reset = false) => {
     try {
       profile = await getMyProfile(false);
     } catch {
-      needLogin.value = true;
+      needLogin.value = !hasToken();
+      if (needLogin.value) {
+        tasks.value = [];
+        myClaims.value = [];
+        return;
+      }
+      uni.showToast({ title: "资料加载失败，请稍后重试", icon: "none" });
       return;
     }
     profileStatus.value = profile.onboardingStatus || "incomplete";
@@ -208,6 +214,14 @@ const loadTasks = async (reset = false) => {
     total.value = taskPage.total || 0;
     tasks.value = reset ? taskPage.rows || [] : [...tasks.value, ...(taskPage.rows || [])];
     myClaims.value = claimPage.rows || [];
+  } catch {
+    needLogin.value = !hasToken();
+    if (needLogin.value) {
+      tasks.value = [];
+      myClaims.value = [];
+      return;
+    }
+    uni.showToast({ title: "任务加载失败，请稍后重试", icon: "none" });
   } finally {
     loading.value = false;
     uni.stopPullDownRefresh();

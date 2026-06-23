@@ -159,9 +159,13 @@ const loadHome = async () => {
     profile.value = profileData;
     claims.value = taskPage.rows || [];
   } catch {
-    needLogin.value = true;
-    claims.value = [];
-    profile.value = null;
+    needLogin.value = !hasToken();
+    if (needLogin.value) {
+      claims.value = [];
+      profile.value = null;
+      return;
+    }
+    uni.showToast({ title: "首页数据加载失败，请稍后重试", icon: "none" });
   } finally {
     loading.value = false;
   }
