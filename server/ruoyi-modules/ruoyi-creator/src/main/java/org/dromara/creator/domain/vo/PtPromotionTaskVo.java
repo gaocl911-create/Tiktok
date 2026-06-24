@@ -30,6 +30,10 @@ public class PtPromotionTaskVo implements Serializable {
     private Date publishTime;
     private Date pauseTime;
     private Date finishTime;
+    private Long textCategoryId;
+    private Long imageCategoryId;
+    private String textCategoryName;
+    private String imageCategoryName;
     private String remark;
     private Long createBy;
     private Date createTime;

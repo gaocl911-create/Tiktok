@@ -7,10 +7,10 @@ import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
-import org.dromara.creator.domain.PtPromotionTask;
+import org.dromara.creator.domain.*;
 import org.dromara.creator.domain.bo.PtPromotionTaskBo;
 import org.dromara.creator.domain.vo.PtPromotionTaskVo;
-import org.dromara.creator.mapper.PtPromotionTaskMapper;
+import org.dromara.creator.mapper.*;
 import org.dromara.creator.service.IPtPromotionTaskService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.List;
 
 @RequiredArgsConstructor
 @Service
@@ -27,11 +28,19 @@ public class PtPromotionTaskServiceImpl implements IPtPromotionTaskService {
     private static final String STATUS_PUBLISHED = "published";
     private static final String STATUS_PAUSED = "paused";
     private static final String STATUS_FINISHED = "finished";
+    private static final String CATEGORY_TEXT = "text";
+    private static final String CATEGORY_IMAGE = "image";
+    private static final String MATERIAL_ENABLED = "0";
+    private static final String ASSIGN_MODE_SEQUENCE_LOOP = "sequence_loop";
 
     private final PtPromotionTaskMapper ptPromotionTaskMapper;
+    private final PtTaskMaterialConfigMapper ptTaskMaterialConfigMapper;
+    private final PtMaterialCategoryMapper ptMaterialCategoryMapper;
+    private final PtMaterialTextMapper ptMaterialTextMapper;
+    private final PtMaterialImageMapper ptMaterialImageMapper;
 
     @Override
-    public TableDataInfo<PtPromotionTask> queryTaskPage(PtPromotionTask query, PageQuery pageQuery) {
+    public TableDataInfo<PtPromotionTaskVo> queryTaskPage(PtPromotionTask query, PageQuery pageQuery) {
         LambdaQueryWrapper<PtPromotionTask> lqw = Wrappers.lambdaQuery();
         lqw.eq(query.getTenantId() != null, PtPromotionTask::getTenantId, query.getTenantId());
         lqw.eq(query.getPlatform() != null && !query.getPlatform().isBlank(), PtPromotionTask::getPlatform, query.getPlatform());
@@ -39,7 +48,8 @@ public class PtPromotionTaskServiceImpl implements IPtPromotionTaskService {
         lqw.like(query.getTaskTitle() != null && !query.getTaskTitle().isBlank(), PtPromotionTask::getTaskTitle, query.getTaskTitle());
         lqw.orderByDesc(PtPromotionTask::getCreateTime);
         Page<PtPromotionTask> page = ptPromotionTaskMapper.selectPage(pageQuery.build(), lqw);
-        return TableDataInfo.build(page);
+        List<PtPromotionTaskVo> rows = page.getRecords().stream().map(this::toVo).toList();
+        return new TableDataInfo<>(rows, page.getTotal());
     }
 
     @Override
@@ -60,6 +70,7 @@ public class PtPromotionTaskServiceImpl implements IPtPromotionTaskService {
         task.setSubmittedCount(0);
         task.setApprovedCount(0);
         ptPromotionTaskMapper.insert(task);
+        saveMaterialConfig(task.getTaskId(), bo);
         return toVo(task);
     }
 
@@ -80,6 +91,7 @@ public class PtPromotionTaskServiceImpl implements IPtPromotionTaskService {
         copyBo(task, bo);
         task.setPlatform(defaultPlatform(bo.getPlatform()));
         ptPromotionTaskMapper.updateById(task);
+        saveMaterialConfig(task.getTaskId(), bo);
         return toVo(task);
     }
 
@@ -167,11 +179,96 @@ public class PtPromotionTaskServiceImpl implements IPtPromotionTaskService {
         if (task.getEndTime() != null && task.getEndTime().before(new Date())) {
             throw new ServiceException("截止时间已过，不能发布任务");
         }
+        validateMaterialReady(task.getTaskId());
+    }
+
+    private void saveMaterialConfig(Long taskId, PtPromotionTaskBo bo) {
+        if (bo.getTextCategoryId() == null && bo.getImageCategoryId() == null) {
+            return;
+        }
+        if (bo.getTextCategoryId() == null || bo.getImageCategoryId() == null) {
+            throw new ServiceException("文案分类和图片分类必须同时选择");
+        }
+        ensureCategory(bo.getTextCategoryId(), CATEGORY_TEXT);
+        ensureCategory(bo.getImageCategoryId(), CATEGORY_IMAGE);
+
+        PtTaskMaterialConfig config = queryMaterialConfig(taskId);
+        if (config == null) {
+            config = new PtTaskMaterialConfig();
+            config.setTaskId(taskId);
+            config.setAssignMode(ASSIGN_MODE_SEQUENCE_LOOP);
+            config.setTextCategoryId(bo.getTextCategoryId());
+            config.setImageCategoryId(bo.getImageCategoryId());
+            ptTaskMaterialConfigMapper.insert(config);
+            return;
+        }
+        config.setTextCategoryId(bo.getTextCategoryId());
+        config.setImageCategoryId(bo.getImageCategoryId());
+        config.setAssignMode(ASSIGN_MODE_SEQUENCE_LOOP);
+        ptTaskMaterialConfigMapper.updateById(config);
+    }
+
+    private void validateMaterialReady(Long taskId) {
+        PtTaskMaterialConfig config = queryMaterialConfig(taskId);
+        if (config == null || config.getTextCategoryId() == null || config.getImageCategoryId() == null) {
+            throw new ServiceException("请先选择文案分类和图片分类");
+        }
+        ensureCategory(config.getTextCategoryId(), CATEGORY_TEXT);
+        ensureCategory(config.getImageCategoryId(), CATEGORY_IMAGE);
+        if (countEnabledTexts(config.getTextCategoryId()) <= 0) {
+            throw new ServiceException("文案分类下没有启用文案，不能发布任务");
+        }
+        if (countEnabledImages(config.getImageCategoryId()) <= 0) {
+            throw new ServiceException("图片分类下没有启用图片，不能发布任务");
+        }
+    }
+
+    private PtTaskMaterialConfig queryMaterialConfig(Long taskId) {
+        LambdaQueryWrapper<PtTaskMaterialConfig> lqw = Wrappers.lambdaQuery();
+        lqw.eq(PtTaskMaterialConfig::getTaskId, taskId);
+        lqw.last("limit 1");
+        return ptTaskMaterialConfigMapper.selectOne(lqw);
+    }
+
+    private void ensureCategory(Long categoryId, String expectedType) {
+        PtMaterialCategory category = ptMaterialCategoryMapper.selectById(categoryId);
+        if (category == null || !expectedType.equals(category.getCategoryType()) || !MATERIAL_ENABLED.equals(category.getStatus())) {
+            throw new ServiceException(CATEGORY_TEXT.equals(expectedType) ? "请选择启用的文案分类" : "请选择启用的图片分类");
+        }
+    }
+
+    private long countEnabledTexts(Long categoryId) {
+        LambdaQueryWrapper<PtMaterialText> lqw = Wrappers.lambdaQuery();
+        lqw.eq(PtMaterialText::getCategoryId, categoryId);
+        lqw.eq(PtMaterialText::getStatus, MATERIAL_ENABLED);
+        return ptMaterialTextMapper.selectCount(lqw);
+    }
+
+    private long countEnabledImages(Long categoryId) {
+        LambdaQueryWrapper<PtMaterialImage> lqw = Wrappers.lambdaQuery();
+        lqw.eq(PtMaterialImage::getCategoryId, categoryId);
+        lqw.eq(PtMaterialImage::getStatus, MATERIAL_ENABLED);
+        return ptMaterialImageMapper.selectCount(lqw);
     }
 
     private PtPromotionTaskVo toVo(PtPromotionTask task) {
         PtPromotionTaskVo vo = new PtPromotionTaskVo();
         BeanUtils.copyProperties(task, vo);
+        PtTaskMaterialConfig config = queryMaterialConfig(task.getTaskId());
+        if (config != null) {
+            vo.setTextCategoryId(config.getTextCategoryId());
+            vo.setImageCategoryId(config.getImageCategoryId());
+            vo.setTextCategoryName(queryCategoryName(config.getTextCategoryId()));
+            vo.setImageCategoryName(queryCategoryName(config.getImageCategoryId()));
+        }
         return vo;
+    }
+
+    private String queryCategoryName(Long categoryId) {
+        if (categoryId == null) {
+            return null;
+        }
+        PtMaterialCategory category = ptMaterialCategoryMapper.selectById(categoryId);
+        return category == null ? null : category.getCategoryName();
     }
 }

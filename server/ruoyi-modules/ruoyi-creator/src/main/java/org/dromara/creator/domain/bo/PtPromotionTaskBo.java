@@ -37,5 +37,9 @@ public class PtPromotionTaskBo {
 
     private String taskStatus;
 
+    private Long textCategoryId;
+
+    private Long imageCategoryId;
+
     private String remark;
 }

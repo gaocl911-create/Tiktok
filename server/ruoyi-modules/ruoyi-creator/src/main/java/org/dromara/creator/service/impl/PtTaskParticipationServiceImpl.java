@@ -18,12 +18,14 @@ import org.dromara.creator.domain.bo.PtTaskSubmissionBo;
 import org.dromara.creator.domain.vo.MonitorCreateResultVo;
 import org.dromara.creator.domain.vo.PtPromotionTaskVo;
 import org.dromara.creator.domain.vo.PtTaskClaimVo;
+import org.dromara.creator.domain.vo.PtTaskMaterialAssignmentVo;
 import org.dromara.creator.domain.vo.PtTaskSubmissionVo;
 import org.dromara.creator.mapper.PtPromotionTaskMapper;
 import org.dromara.creator.mapper.PtStaffProfileMapper;
 import org.dromara.creator.mapper.PtTaskClaimMapper;
 import org.dromara.creator.mapper.PtTaskSubmissionMapper;
 import org.dromara.creator.service.ICreatorMonitorCommandService;
+import org.dromara.creator.service.IPtTaskMaterialAssignmentService;
 import org.dromara.creator.service.IPtTaskParticipationService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -54,6 +56,7 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
     private final PtTaskClaimMapper ptTaskClaimMapper;
     private final PtTaskSubmissionMapper ptTaskSubmissionMapper;
     private final ICreatorMonitorCommandService creatorMonitorCommandService;
+    private final IPtTaskMaterialAssignmentService taskMaterialAssignmentService;
 
     @Override
     public TableDataInfo<PtPromotionTask> queryPublishedTaskPage(PtPromotionTask query, PageQuery pageQuery) {
@@ -81,17 +84,20 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
     @Transactional(rollbackFor = Exception.class)
     public PtTaskClaimVo claimTask(Long taskId) {
         PtStaffProfile profile = getApprovedMyProfile();
-        PtPromotionTask task = getTask(taskId);
+        PtPromotionTask task = getTaskForUpdate(taskId);
         ensureTaskCanClaim(task);
+
         PtTaskClaim existing = findClaim(taskId, LoginHelper.getUserId());
         if (existing != null) {
             return toClaimVo(existing);
         }
-        Integer claimedCount = task.getClaimedCount() == null ? 0 : task.getClaimedCount();
-        Integer totalQuota = task.getTotalQuota() == null ? 0 : task.getTotalQuota();
+
+        int claimedCount = task.getClaimedCount() == null ? 0 : task.getClaimedCount();
+        int totalQuota = task.getTotalQuota() == null ? 0 : task.getTotalQuota();
         if (claimedCount >= totalQuota) {
             throw new ServiceException("任务名额已满");
         }
+
         Date now = new Date();
         PtTaskClaim claim = new PtTaskClaim();
         claim.setTenantId(LoginHelper.getTenantId());
@@ -102,8 +108,19 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         claim.setClaimTime(now);
         ptTaskClaimMapper.insert(claim);
 
+        taskMaterialAssignmentService.assignForClaim(task, claim, claimedCount + 1);
+
         task.setClaimedCount(claimedCount + 1);
         ptPromotionTaskMapper.updateById(task);
+        return toClaimVo(claim);
+    }
+
+    @Override
+    public PtTaskClaimVo queryMyClaimById(Long claimId) {
+        PtTaskClaim claim = getClaim(claimId);
+        if (!LoginHelper.getUserId().equals(claim.getUserId())) {
+            throw new ServiceException("只能查看自己的领取任务");
+        }
         return toClaimVo(claim);
     }
 
@@ -137,6 +154,7 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         if (!TASK_PUBLISHED.equals(task.getTaskStatus())) {
             throw new ServiceException("任务当前不可提交");
         }
+
         String contentUrl = normalizeContentUrl(bo.getContentUrl());
         Date now = new Date();
         PtTaskSubmission submission = new PtTaskSubmission();
@@ -268,6 +286,17 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         return task;
     }
 
+    private PtPromotionTask getTaskForUpdate(Long taskId) {
+        LambdaQueryWrapper<PtPromotionTask> lqw = Wrappers.lambdaQuery();
+        lqw.eq(PtPromotionTask::getTaskId, taskId);
+        lqw.last("limit 1 for update");
+        PtPromotionTask task = ptPromotionTaskMapper.selectOne(lqw);
+        if (task == null) {
+            throw new ServiceException("兼职任务不存在");
+        }
+        return task;
+    }
+
     private PtTaskClaim getClaim(Long claimId) {
         PtTaskClaim claim = ptTaskClaimMapper.selectById(claimId);
         if (claim == null) {
@@ -326,6 +355,7 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
             vo.setRealName(profile.getRealName());
             vo.setPhone(profile.getPhone());
         }
+        fillAssignment(vo, claim.getClaimId());
         return vo;
     }
 
@@ -342,7 +372,34 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
             vo.setPhone(profile.getPhone());
             vo.setDouyinId(profile.getDouyinId());
         }
+        fillAssignment(vo, submission.getClaimId());
         return vo;
+    }
+
+    private void fillAssignment(PtTaskClaimVo vo, Long claimId) {
+        PtTaskMaterialAssignmentVo assignment = taskMaterialAssignmentService.queryByClaimId(claimId);
+        if (assignment == null) {
+            return;
+        }
+        vo.setAssignIndex(assignment.getAssignIndex());
+        vo.setTextId(assignment.getTextId());
+        vo.setAssignedText(assignment.getAssignedText());
+        vo.setImageId(assignment.getImageId());
+        vo.setAssignedImageUrl(assignment.getAssignedImageUrl());
+        vo.setAssignedImageName(assignment.getAssignedImageName());
+    }
+
+    private void fillAssignment(PtTaskSubmissionVo vo, Long claimId) {
+        PtTaskMaterialAssignmentVo assignment = taskMaterialAssignmentService.queryByClaimId(claimId);
+        if (assignment == null) {
+            return;
+        }
+        vo.setAssignIndex(assignment.getAssignIndex());
+        vo.setTextId(assignment.getTextId());
+        vo.setAssignedText(assignment.getAssignedText());
+        vo.setImageId(assignment.getImageId());
+        vo.setAssignedImageUrl(assignment.getAssignedImageUrl());
+        vo.setAssignedImageName(assignment.getAssignedImageName());
     }
 
     private String defaultPlatform(String platform) {
@@ -362,6 +419,6 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
     }
 
     private String trimUrl(String url) {
-        return url.replaceAll("[，。；、）)\\]】>]+$", "");
+        return url.replaceAll("[，。；;、）)\\]】>]+$", "");
     }
 }

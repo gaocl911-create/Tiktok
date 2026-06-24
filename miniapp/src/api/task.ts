@@ -35,6 +35,12 @@ export interface TaskClaim {
   platform?: string;
   realName?: string;
   phone?: string;
+  assignIndex?: number;
+  textId?: number | string;
+  assignedText?: string;
+  imageId?: number | string;
+  assignedImageUrl?: string;
+  assignedImageName?: string;
 }
 
 export interface TaskSubmission {
@@ -52,6 +58,12 @@ export interface TaskSubmission {
   monitorTargetId?: number | string;
   monitorRunId?: number | string;
   taskTitle?: string;
+  assignIndex?: number;
+  textId?: number | string;
+  assignedText?: string;
+  imageId?: number | string;
+  assignedImageUrl?: string;
+  assignedImageName?: string;
 }
 
 export interface SubmitContentPayload {
@@ -79,6 +91,12 @@ export const listMyTasks = (params: { pageNum: number; pageSize: number }) =>
     url: "/miniapp/task/my",
     method: "GET",
     data: params,
+  });
+
+export const getMyTaskClaim = (claimId: number | string) =>
+  request<TaskClaim>({
+    url: `/miniapp/task/claim/${claimId}`,
+    method: "GET",
   });
 
 export const submitTaskContent = (claimId: number | string, data: SubmitContentPayload) =>

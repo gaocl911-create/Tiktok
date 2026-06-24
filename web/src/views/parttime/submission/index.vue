@@ -60,6 +60,28 @@
             <span>{{ row.contentDesc || '--' }}</span>
           </template>
         </el-table-column>
+        <el-table-column label="分配素材" min-width="280">
+          <template #default="{ row }">
+            <div class="material-cell">
+              <el-popover v-if="row.assignedText" placement="top-start" width="420" trigger="hover">
+                <template #reference>
+                  <el-link type="primary">文案 #{{ row.assignIndex || '-' }}</el-link>
+                </template>
+                <div class="assigned-text">{{ row.assignedText }}</div>
+              </el-popover>
+              <span v-else class="muted">文案未分配</span>
+              <el-image
+                v-if="row.assignedImageUrl"
+                class="material-thumb"
+                :src="row.assignedImageUrl"
+                :preview-src-list="[row.assignedImageUrl]"
+                preview-teleported
+                fit="cover"
+              />
+              <span v-else class="muted">图片未分配</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" prop="submissionStatus" width="110" align="center">
           <template #default="{ row }">
             <el-tag :type="statusMeta(row.submissionStatus).type">{{ statusMeta(row.submissionStatus).label }}</el-tag>
@@ -238,5 +260,25 @@ onMounted(getList);
 .muted {
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+.material-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.material-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.assigned-text {
+  max-height: 260px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.6;
 }
 </style>

@@ -58,6 +58,14 @@
             <span>{{ row.submittedCount || 0 }} / {{ row.approvedCount || 0 }}</span>
           </template>
         </el-table-column>
+        <el-table-column label="素材分类" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="material-cell">
+              <span>文案：{{ row.textCategoryName || '未配置' }}</span>
+              <span>图片：{{ row.imageCategoryName || '未配置' }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="有效期" min-width="260">
           <template #default="{ row }">
             <span>{{ formatTime(row.startTime) }} 至 {{ formatTime(row.endTime) }}</span>
@@ -127,6 +135,16 @@
         <el-form-item label="名额" prop="totalQuota">
           <el-input-number v-model="form.totalQuota" :min="1" :step="1" :precision="0" style="width: 180px" />
         </el-form-item>
+        <el-form-item label="文案分类" prop="textCategoryId">
+          <el-select v-model="form.textCategoryId" placeholder="请选择文案分类" filterable style="width: 100%">
+            <el-option v-for="item in textCategoryOptions" :key="item.categoryId" :label="item.categoryName" :value="item.categoryId" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="图片分类" prop="imageCategoryId">
+          <el-select v-model="form.imageCategoryId" placeholder="请选择图片分类" filterable style="width: 100%">
+            <el-option v-for="item in imageCategoryOptions" :key="item.categoryId" :label="item.categoryName" :value="item.categoryId" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="有效期">
           <el-date-picker
             v-model="timeRange"
@@ -174,6 +192,8 @@ import {
   updateParttimeTask
 } from '@/api/parttime/task';
 import type { PromotionTaskStatus, PtPromotionTask, PtPromotionTaskForm, PtPromotionTaskQuery } from '@/api/parttime/task/types';
+import { listMaterialCategoryOptions } from '@/api/parttime/material/category';
+import type { PtMaterialCategory } from '@/api/parttime/material/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 
@@ -181,6 +201,8 @@ const loading = ref(false);
 const submitting = ref(false);
 const dialogVisible = ref(false);
 const taskList = ref<PtPromotionTask[]>([]);
+const textCategoryOptions = ref<PtMaterialCategory[]>([]);
+const imageCategoryOptions = ref<PtMaterialCategory[]>([]);
 const total = ref(0);
 const queryFormRef = ref<ElFormInstance>();
 const taskFormRef = ref<ElFormInstance>();
@@ -201,6 +223,8 @@ const defaultForm = (): PtPromotionTaskForm => ({
   taskRequirement: '',
   unitPrice: 0,
   totalQuota: 10,
+  textCategoryId: undefined,
+  imageCategoryId: undefined,
   startTime: '',
   endTime: '',
   remark: ''
@@ -212,7 +236,9 @@ const rules: ElFormRules = {
   taskTitle: [{ required: true, message: '请输入任务标题', trigger: 'blur' }],
   platform: [{ required: true, message: '请选择平台', trigger: 'change' }],
   unitPrice: [{ required: true, message: '请输入任务单价', trigger: 'blur' }],
-  totalQuota: [{ required: true, message: '请输入任务名额', trigger: 'blur' }]
+  totalQuota: [{ required: true, message: '请输入任务名额', trigger: 'blur' }],
+  textCategoryId: [{ required: true, message: '请选择文案分类', trigger: 'change' }],
+  imageCategoryId: [{ required: true, message: '请选择图片分类', trigger: 'change' }]
 };
 
 const statusOptions: Array<{ label: string; value: PromotionTaskStatus }> = [
@@ -253,6 +279,12 @@ const getList = async () => {
   }
 };
 
+const loadMaterialOptions = async () => {
+  const [textRes, imageRes] = await Promise.all([listMaterialCategoryOptions('text'), listMaterialCategoryOptions('image')]);
+  textCategoryOptions.value = textRes.data || [];
+  imageCategoryOptions.value = imageRes.data || [];
+};
+
 const handleQuery = () => {
   queryParams.pageNum = 1;
   getList();
@@ -285,6 +317,8 @@ const handleEdit = (row: PtPromotionTask) => {
     taskRequirement: row.taskRequirement || '',
     unitPrice: Number(row.unitPrice || 0),
     totalQuota: Number(row.totalQuota || 1),
+    textCategoryId: row.textCategoryId,
+    imageCategoryId: row.imageCategoryId,
     startTime: row.startTime || '',
     endTime: row.endTime || '',
     remark: row.remark || ''
@@ -335,7 +369,10 @@ const handleFinish = async (row: PtPromotionTask) => {
   await getList();
 };
 
-onMounted(getList);
+onMounted(async () => {
+  await loadMaterialOptions();
+  await getList();
+});
 </script>
 
 <style scoped>
@@ -367,6 +404,14 @@ onMounted(getList);
 .money {
   color: #d97706;
   font-variant-numeric: tabular-nums;
+}
+
+.material-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 .form-tip {

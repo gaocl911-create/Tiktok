@@ -86,3 +86,21 @@ npm run build:mp-weixin
 ```
 
 然后用微信开发者工具上传 `miniapp\dist\build\mp-weixin`。
+
+## MinIO bucket init
+
+The backend OSS config uses bucket `ruoyi`. If image upload stays at 100% or returns an OSS upload error after rebuilding Docker data, create the bucket and allow public download:
+
+```powershell
+docker exec tiktok-platform-minio sh -lc "mc alias set local http://127.0.0.1:9000 ruoyi ruoyi123 && mc mb -p local/ruoyi && mc anonymous set download local/ruoyi"
+```
+
+When the API runs inside Docker, `sys_oss_config.endpoint` should use the Docker service name:
+
+```sql
+update sys_oss_config
+set endpoint = 'minio:9000',
+    domain = 'localhost:19000',
+    is_https = 'N'
+where config_key = 'minio';
+```

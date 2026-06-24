@@ -24,7 +24,7 @@ public class ParttimeTaskController {
 
     @SaCheckPermission("parttime:task:list")
     @GetMapping("/list")
-    public TableDataInfo<PtPromotionTask> list(PtPromotionTask query, PageQuery pageQuery) {
+    public TableDataInfo<PtPromotionTaskVo> list(PtPromotionTask query, PageQuery pageQuery) {
         return promotionTaskService.queryTaskPage(query, pageQuery);
     }
 

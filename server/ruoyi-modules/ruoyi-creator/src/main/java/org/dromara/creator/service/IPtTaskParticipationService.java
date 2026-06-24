@@ -17,6 +17,8 @@ public interface IPtTaskParticipationService {
 
     PtTaskClaimVo claimTask(Long taskId);
 
+    PtTaskClaimVo queryMyClaimById(Long claimId);
+
     TableDataInfo<PtTaskClaimVo> queryMyClaimPage(PageQuery pageQuery);
 
     PtTaskSubmissionVo submitContent(PtTaskSubmissionBo bo);

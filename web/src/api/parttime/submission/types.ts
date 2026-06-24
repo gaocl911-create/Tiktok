@@ -24,6 +24,12 @@ export interface PtTaskSubmission extends BaseEntity {
   realName?: string;
   phone?: string;
   douyinId?: string;
+  assignIndex?: number;
+  textId?: string | number;
+  assignedText?: string;
+  imageId?: string | number;
+  assignedImageUrl?: string;
+  assignedImageName?: string;
 }
 
 export interface PtTaskSubmissionQuery extends PageQuery {

@@ -7,32 +7,21 @@ import java.io.Serializable;
 import java.util.Date;
 
 @Data
-public class PtTaskClaimVo implements Serializable {
+public class PtTaskMaterialAssignmentVo implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private Long claimId;
+    private Long assignmentId;
     private String tenantId;
     private Long taskId;
-    private Long profileId;
+    private Long claimId;
     private Long userId;
-    private String claimStatus;
-    private Date claimTime;
-    private Date submitTime;
-    private Date finishTime;
-    private String remark;
-    private Date createTime;
-
-    private String taskTitle;
-    private String platform;
-    private String realName;
-    private String phone;
-
     private Integer assignIndex;
     private Long textId;
     private String assignedText;
     private Long imageId;
     private String assignedImageUrl;
     private String assignedImageName;
+    private Date createTime;
 }

@@ -8,7 +8,7 @@ import org.dromara.creator.domain.vo.PtPromotionTaskVo;
 
 public interface IPtPromotionTaskService {
 
-    TableDataInfo<PtPromotionTask> queryTaskPage(PtPromotionTask query, PageQuery pageQuery);
+    TableDataInfo<PtPromotionTaskVo> queryTaskPage(PtPromotionTask query, PageQuery pageQuery);
 
     PtPromotionTaskVo queryById(Long taskId);
 

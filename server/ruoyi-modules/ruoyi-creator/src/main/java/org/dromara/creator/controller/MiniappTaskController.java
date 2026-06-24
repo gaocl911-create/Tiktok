@@ -38,6 +38,11 @@ public class MiniappTaskController {
         return R.ok(taskParticipationService.claimTask(taskId));
     }
 
+    @GetMapping("/claim/{claimId}")
+    public R<PtTaskClaimVo> getClaim(@NotNull(message = "claimId is required") @PathVariable Long claimId) {
+        return R.ok(taskParticipationService.queryMyClaimById(claimId));
+    }
+
     @GetMapping("/my")
     public TableDataInfo<PtTaskClaimVo> myTasks(PageQuery pageQuery) {
         return taskParticipationService.queryMyClaimPage(pageQuery);

@@ -18,6 +18,10 @@ export interface PtPromotionTask extends BaseEntity {
   publishTime?: string;
   pauseTime?: string;
   finishTime?: string;
+  textCategoryId?: string | number;
+  imageCategoryId?: string | number;
+  textCategoryName?: string;
+  imageCategoryName?: string;
   remark?: string;
 }
 
@@ -37,5 +41,7 @@ export interface PtPromotionTaskForm {
   totalQuota: number;
   startTime?: string;
   endTime?: string;
+  textCategoryId?: string | number;
+  imageCategoryId?: string | number;
   remark?: string;
 }

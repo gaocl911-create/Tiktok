@@ -38,4 +38,11 @@ public class PtTaskSubmissionVo implements Serializable {
     private String realName;
     private String phone;
     private String douyinId;
+
+    private Integer assignIndex;
+    private Long textId;
+    private String assignedText;
+    private Long imageId;
+    private String assignedImageUrl;
+    private String assignedImageName;
 }
