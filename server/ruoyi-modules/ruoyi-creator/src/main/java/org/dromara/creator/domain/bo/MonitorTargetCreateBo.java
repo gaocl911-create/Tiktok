@@ -26,7 +26,7 @@ public class MonitorTargetCreateBo {
     private Date baselineTime;
     private Boolean discoverNewContent;
     private Integer profileCollectIntervalMin = 360;
-    private Integer contentCollectIntervalMin = 30;
+    private Integer contentCollectIntervalMin = 120;
     private String remark;
     private String tags;
 }

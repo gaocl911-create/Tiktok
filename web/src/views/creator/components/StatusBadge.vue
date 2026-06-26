@@ -18,6 +18,8 @@ const statusMap: Record<string, { label: string; tone: string }> = {
   partial: { label: '部分数据', tone: 'warning' },
   paused: { label: '已暂停', tone: 'warning' },
   budget_limited: { label: '预算受限', tone: 'warning' },
+  unavailable: { label: '作品失效', tone: 'danger' },
+  content_unavailable: { label: '作品失效', tone: 'danger' },
   failed: { label: '采集失败', tone: 'danger' },
   stopped: { label: '已停止', tone: 'danger' }
 };

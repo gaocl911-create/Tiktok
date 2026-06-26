@@ -154,8 +154,13 @@
           </el-form-item>
           <el-form-item label="作品指标刷新频率">
             <el-select v-model="form.contentCollectIntervalMin">
+              <el-option label="每15分钟" :value="15" />
               <el-option label="每30分钟" :value="30" />
               <el-option label="每1小时" :value="60" />
+              <el-option label="每2小时（默认）" :value="120" />
+              <el-option label="每4小时" :value="240" />
+              <el-option label="每12小时" :value="720" />
+              <el-option label="每24小时" :value="1440" />
             </el-select>
           </el-form-item>
         </div>
@@ -226,7 +231,7 @@ const form = reactive<CreatorMonitorForm>({
   contactWechat: '',
   discoverNewContent: false,
   profileCollectIntervalMin: 360,
-  contentCollectIntervalMin: 30
+  contentCollectIntervalMin: 120
 });
 const wechatForm = reactive({
   creatorId: '',
@@ -369,6 +374,7 @@ const submit = async () => {
     form.remark = '';
     form.contactWechat = '';
     form.discoverNewContent = false;
+    form.contentCollectIntervalMin = 120;
     await loadAddedByOptions();
     await loadData();
   } finally {

@@ -7,6 +7,7 @@
       </div>
       <div class="heading-actions">
         <el-button v-hasPermi="['creator:target:collect']" :icon="Refresh" :loading="batchLoading" @click="batchCollect">批量刷新</el-button>
+        <el-button v-hasPermi="['creator:target:add']" @click="batchIntervalDialogVisible = true">批量设置间隔</el-button>
         <el-button v-hasPermi="['creator:content:add']" type="primary" :icon="Plus" @click="dialogVisible = true">添加作品</el-button>
       </div>
     </header>
@@ -124,14 +125,33 @@
         </el-form-item>
         <el-form-item label="监控间隔">
           <el-select v-model="form.contentCollectIntervalMin" style="width: 100%">
-            <el-option label="每 30 分钟" :value="30" />
-            <el-option label="每 1 小时" :value="60" />
+            <el-option v-for="option in intervalOptions" :key="option.value" :label="option.label" :value="option.value" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submit">添加监控</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="batchIntervalDialogVisible" title="批量设置自动刷新间隔" width="460px">
+      <el-form label-position="top">
+        <el-form-item label="自动刷新时间">
+          <el-select v-model="batchIntervalForm.contentCollectIntervalMin" style="width: 100%">
+            <el-option v-for="option in intervalOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+        </el-form-item>
+        <el-alert
+          :closable="false"
+          show-icon
+          type="info"
+          title="保存后会批量修改所有当前权限内的内容作品监控，并从当前时间重新计算下一次自动采集时间。"
+        />
+      </el-form>
+      <template #footer>
+        <el-button @click="batchIntervalDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="batchIntervalSubmitting" @click="submitBatchInterval">保存</el-button>
       </template>
     </el-dialog>
 
@@ -147,6 +167,7 @@
 import { Plus, Refresh, Search, VideoCamera } from '@element-plus/icons-vue';
 import {
   addContentLink,
+  batchUpdateContentCollectInterval,
   collectDueTargets,
   collectTarget,
   deleteContentMonitors,
@@ -154,7 +175,7 @@ import {
   getCreatorAccount,
   listContentPosts
 } from '@/api/creator';
-import type { ContentLinkForm, ContentPost, CreatorAccount, MonitorTarget } from '@/api/creator/types';
+import type { ContentLinkForm, ContentPost, CreatorAccount } from '@/api/creator/types';
 import CreatorDetailDrawer from '../components/CreatorDetailDrawer.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 
@@ -164,6 +185,7 @@ const batchLoading = ref(false);
 const collectingId = ref('');
 const deletingId = ref('');
 const dialogVisible = ref(false);
+const batchIntervalDialogVisible = ref(false);
 const creatorDrawerVisible = ref(false);
 const selectedCreatorId = ref('');
 const rows = ref<ContentPost[]>([]);
@@ -171,7 +193,18 @@ const creatorMap = reactive<Record<string, CreatorAccount>>({});
 const total = ref(0);
 const formRef = ref<ElFormInstance>();
 const query = reactive({ pageNum: 1, pageSize: 12, platform: 'douyin', title: '', metricsStatus: '' });
-const form = reactive<ContentLinkForm>({ platform: 'douyin', contentInput: '', remark: '', contentCollectIntervalMin: 30 });
+const form = reactive<ContentLinkForm>({ platform: 'douyin', contentInput: '', remark: '', contentCollectIntervalMin: 120 });
+const batchIntervalSubmitting = ref(false);
+const batchIntervalForm = reactive({ contentCollectIntervalMin: 120 });
+const intervalOptions = [
+  { label: '每 15 分钟', value: 15 },
+  { label: '每 30 分钟', value: 30 },
+  { label: '每 1 小时', value: 60 },
+  { label: '每 2 小时（默认）', value: 120 },
+  { label: '每 4 小时', value: 240 },
+  { label: '每 12 小时', value: 720 },
+  { label: '每 24 小时', value: 1440 }
+];
 const rules: ElFormRules = {
   contentInput: [{ required: true, message: '请粘贴作品链接或分享文案', trigger: 'blur' }]
 };
@@ -248,6 +281,23 @@ const collectContent = async (row: ContentPost) => {
   }
 };
 
+const submitBatchInterval = async () => {
+  await ElMessageBox.confirm(
+    '确定要批量修改所有内容作品监控的自动刷新间隔吗？保存后会从当前时间重新计算下一次采集时间。',
+    '批量设置自动刷新间隔',
+    { type: 'warning', confirmButtonText: '批量修改', cancelButtonText: '取消' }
+  );
+  batchIntervalSubmitting.value = true;
+  try {
+    const res = await batchUpdateContentCollectInterval(batchIntervalForm.contentCollectIntervalMin);
+    ElMessage.success(`已更新 ${res.data || 0} 个作品监控的自动刷新间隔`);
+    batchIntervalDialogVisible.value = false;
+    await loadData();
+  } finally {
+    batchIntervalSubmitting.value = false;
+  }
+};
+
 const batchCollect = async () => {
   batchLoading.value = true;
   try {
@@ -288,6 +338,7 @@ const submit = async () => {
     dialogVisible.value = false;
     form.contentInput = '';
     form.remark = '';
+    form.contentCollectIntervalMin = 120;
     await loadData();
   } finally {
     submitting.value = false;

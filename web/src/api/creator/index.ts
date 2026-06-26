@@ -118,6 +118,20 @@ export const collectTarget = (targetId: string) =>
     method: 'post'
   });
 
+export const updateContentCollectInterval = (targetId: string, contentCollectIntervalMin: number) =>
+  request({
+    url: `/creator/target/${targetId}/content-interval`,
+    method: 'put',
+    data: { contentCollectIntervalMin }
+  });
+
+export const batchUpdateContentCollectInterval = (contentCollectIntervalMin: number): AxiosPromise<number> =>
+  request({
+    url: '/creator/target/content-interval/batch',
+    method: 'put',
+    data: { contentCollectIntervalMin }
+  });
+
 export const collectDueTargets = (limit = 100): AxiosPromise<number> =>
   request({
     url: '/creator/target/collect-due',

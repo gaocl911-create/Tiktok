@@ -43,6 +43,14 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
     private static final String PROVIDER_TIKHUB = "tikhub";
     private static final String TARGET_CREATOR_COLLECTION = "creator_collection";
     private static final String TARGET_SINGLE_CONTENT = "single_content";
+    private static final String CONTENT_STATUS_UNAVAILABLE = "unavailable";
+    private static final String TARGET_STATUS_STOPPED = "stopped";
+    private static final String DATA_STATUS_CONTENT_UNAVAILABLE = "content_unavailable";
+    private static final String RELATION_STATUS_UNAVAILABLE = "unavailable";
+    private static final int DEFAULT_PROFILE_COLLECT_INTERVAL_MIN = 360;
+    private static final int DEFAULT_CONTENT_COLLECT_INTERVAL_MIN = 120;
+    private static final int MIN_CONTENT_COLLECT_INTERVAL_MIN = 15;
+    private static final int MAX_CONTENT_COLLECT_INTERVAL_MIN = 1440;
     private static final String TARGET_COLLECT_LOCK_PREFIX = "creator:monitor:collect:";
     private static final String TARGET_COLLECT_BUSY_MESSAGE = "该监控目标正在采集中，请稍后重试";
     private static final long STALE_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000L;
@@ -151,8 +159,8 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         target.setContentId(content == null ? null : content.getContentId());
         target.setBaselineTime(bo.getBaselineTime() == null ? now : bo.getBaselineTime());
         target.setDiscoverNewContent(Boolean.TRUE.equals(bo.getDiscoverNewContent()));
-        target.setProfileCollectIntervalMin(defaultInt(bo.getProfileCollectIntervalMin(), 360));
-        target.setContentCollectIntervalMin(defaultInt(bo.getContentCollectIntervalMin(), 30));
+        target.setProfileCollectIntervalMin(defaultInt(bo.getProfileCollectIntervalMin(), DEFAULT_PROFILE_COLLECT_INTERVAL_MIN));
+        target.setContentCollectIntervalMin(normalizeContentCollectInterval(bo.getContentCollectIntervalMin()));
         target.setNextProfileCollectAt(addMinutes(now, target.getProfileCollectIntervalMin()));
         target.setNextContentCollectAt(addMinutes(now, target.getContentCollectIntervalMin()));
         target.setNextDiscoveryAt(addMinutes(now, target.getContentCollectIntervalMin()));
@@ -242,7 +250,14 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
                     discovered = collectCreatorCollection(target, creator, client, isImmediateTrigger(actualTriggerSource));
                     collected = collectBoundContentMetrics(target, creator, client, actualTriggerSource);
                 } else {
-                    collectSingleContent(target, singleContent, client);
+                    try {
+                        collectSingleContent(target, singleContent, client);
+                    } catch (RuntimeException ex) {
+                        if (isPermanentContentUnavailable(ex)) {
+                            markContentUnavailable(target, singleContent, null, ex);
+                        }
+                        throw ex;
+                    }
                     collected = 1;
                 }
                 finishRunSuccess(run, target, creator, singleContent, client, discovered, collected);
@@ -303,6 +318,64 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
             saveApiLogs(client, run);
             throw ex;
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateContentCollectInterval(Long targetId, Integer contentCollectIntervalMin) {
+        if (targetId == null) {
+            throw new ServiceException("targetId is required.");
+        }
+        int interval = normalizeContentCollectInterval(contentCollectIntervalMin);
+        LambdaQueryWrapper<CmMonitorTarget> lqw = Wrappers.lambdaQuery();
+        lqw.eq(CmMonitorTarget::getTargetId, targetId);
+        lqw.eq(CmMonitorTarget::getStatus, "active");
+        lqw.eq(LoginHelper.isLogin() && !canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId());
+        CmMonitorTarget target = LoginHelper.isLogin()
+            ? monitorTargetMapper.selectScopedOne(lqw)
+            : monitorTargetMapper.selectOne(lqw);
+        if (target == null) {
+            throw new ServiceException("未找到可修改的监控目标，或当前用户无权操作");
+        }
+        Date now = new Date();
+        target.setContentCollectIntervalMin(interval);
+        target.setNextContentCollectAt(addMinutes(now, interval));
+        if (TARGET_CREATOR_COLLECTION.equals(target.getTargetType()) && Boolean.TRUE.equals(target.getDiscoverNewContent())) {
+            target.setNextDiscoveryAt(addMinutes(now, interval));
+        }
+        if (LoginHelper.isLogin()) {
+            target.setUpdateBy(LoginHelper.getUserId());
+        }
+        target.setUpdateTime(now);
+        monitorTargetMapper.updateById(target);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Integer batchUpdateContentCollectInterval(Integer contentCollectIntervalMin) {
+        int interval = normalizeContentCollectInterval(contentCollectIntervalMin);
+        LambdaQueryWrapper<CmMonitorTarget> lqw = Wrappers.lambdaQuery();
+        lqw.in(CmMonitorTarget::getTargetType, TARGET_SINGLE_CONTENT, TARGET_CREATOR_COLLECTION);
+        lqw.eq(CmMonitorTarget::getPlatform, PLATFORM_DOUYIN);
+        lqw.eq(CmMonitorTarget::getStatus, "active");
+        lqw.eq(LoginHelper.isLogin() && !canManageAllTargets(), CmMonitorTarget::getOwnerUserId, LoginHelper.getUserId());
+        List<CmMonitorTarget> targets = LoginHelper.isLogin()
+            ? monitorTargetMapper.selectScopedList(lqw)
+            : monitorTargetMapper.selectList(lqw);
+        Date now = new Date();
+        for (CmMonitorTarget target : targets) {
+            target.setContentCollectIntervalMin(interval);
+            target.setNextContentCollectAt(addMinutes(now, interval));
+            if (TARGET_CREATOR_COLLECTION.equals(target.getTargetType()) && Boolean.TRUE.equals(target.getDiscoverNewContent())) {
+                target.setNextDiscoveryAt(addMinutes(now, interval));
+            }
+            if (LoginHelper.isLogin()) {
+                target.setUpdateBy(LoginHelper.getUserId());
+            }
+            target.setUpdateTime(now);
+            monitorTargetMapper.updateById(target);
+        }
+        return targets.size();
     }
 
     @Override
@@ -538,6 +611,10 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
                 collected++;
             } catch (RuntimeException ex) {
                 finishContentRunFailed(contentRun, client, requestCountBefore, costBefore, ex);
+                if (isPermanentContentUnavailable(ex)) {
+                    markContentUnavailable(target, content, relation, ex);
+                    continue;
+                }
                 throw ex;
             }
         }
@@ -555,6 +632,104 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         target.setLastContentCollectAt(now);
         target.setNextContentCollectAt(addMinutes(now, target.getContentCollectIntervalMin()));
         monitorTargetMapper.updateById(target);
+    }
+
+    private boolean isPermanentContentUnavailable(RuntimeException ex) {
+        String message = ex == null ? null : ex.getMessage();
+        if (StringUtils.isBlank(message)) {
+            return false;
+        }
+        String normalized = message.toLowerCase(Locale.ROOT);
+        if (normalized.contains("read timed out")
+            || normalized.contains("timed out")
+            || normalized.contains("connection reset")
+            || normalized.contains("http 402")
+            || normalized.contains("http 429")
+            || normalized.contains("http 401")
+            || normalized.contains("http 403")
+            || normalized.contains("http 500")
+            || normalized.contains("http 502")
+            || normalized.contains("http 503")
+            || normalized.contains("http 504")
+            || normalized.contains("service unavailable")
+            || normalized.contains("temporarily unavailable")
+            || normalized.contains("temporary unavailable")
+            || normalized.contains("try again")
+            || normalized.contains("rate limit")
+            || normalized.contains("quota")
+            || normalized.contains("balance")
+            || normalized.contains("credit")
+            || message.contains("额度")
+            || message.contains("余额")
+            || message.contains("限流")
+            || message.contains("频率")) {
+            return false;
+        }
+        return (normalized.contains("http 400") && normalized.contains("fetch_one_video"))
+            || normalized.contains("http 404")
+            || normalized.contains("not found")
+            || normalized.contains("not exist")
+            || normalized.contains("does not exist")
+            || normalized.contains("deleted")
+            || normalized.contains("unavailable")
+            || normalized.contains("invalid aweme")
+            || normalized.contains("aweme not found")
+            || message.contains("不存在")
+            || message.contains("未找到")
+            || message.contains("已删除")
+            || message.contains("被删除")
+            || message.contains("不可见")
+            || message.contains("已失效")
+            || message.contains("失效");
+    }
+
+    private void markContentUnavailable(CmMonitorTarget target, CmContentPost content,
+                                        CmMonitorTargetContent relation, RuntimeException ex) {
+        Date now = new Date();
+        if (content != null) {
+            content.setMetricsStatus(CONTENT_STATUS_UNAVAILABLE);
+            content.setLastMetricsCollectAt(now);
+            content.setUpdateTime(now);
+            contentPostMapper.updateById(content);
+        }
+        if (relation != null) {
+            relation.setStatus(RELATION_STATUS_UNAVAILABLE);
+            relation.setUpdateTime(now);
+            targetContentMapper.updateById(relation);
+        } else if (target != null && content != null) {
+            targetContentMapper.update(null,
+                Wrappers.<CmMonitorTargetContent>lambdaUpdate()
+                    .eq(CmMonitorTargetContent::getTargetId, target.getTargetId())
+                    .eq(CmMonitorTargetContent::getContentId, content.getContentId())
+                    .eq(CmMonitorTargetContent::getStatus, "active")
+                    .set(CmMonitorTargetContent::getStatus, RELATION_STATUS_UNAVAILABLE)
+                    .set(CmMonitorTargetContent::getUpdateTime, now));
+        }
+        if (target != null && TARGET_SINGLE_CONTENT.equals(target.getTargetType())) {
+            target.setStatus(TARGET_STATUS_STOPPED);
+            target.setDataStatus(DATA_STATUS_CONTENT_UNAVAILABLE);
+            target.setNextContentCollectAt(null);
+            target.setUpdateTime(now);
+            target.setRemark(appendRemark(target.getRemark(), "作品疑似已删除或不可见，系统已自动停止监控。"));
+            monitorTargetMapper.updateById(target);
+        }
+        log.info("content monitor auto stopped unavailable content, targetId={}, contentId={}, message={}",
+            target == null ? null : target.getTargetId(),
+            content == null ? null : content.getContentId(),
+            ex == null ? null : ex.getMessage());
+    }
+
+    private String appendRemark(String remark, String message) {
+        if (StringUtils.isBlank(message)) {
+            return remark;
+        }
+        if (StringUtils.isBlank(remark)) {
+            return truncate(message, 500);
+        }
+        if (remark.contains(message)) {
+            return remark;
+        }
+        return truncate(remark + "\n" + message, 500);
     }
 
     private String resolveSecUserId(TikHubClient client, String input) {
@@ -652,8 +827,8 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         target.setDiscoverNewContent(Boolean.TRUE.equals(bo.getDiscoverNewContent()));
         target.setTargetName(defaultText(bo.getTargetName(), creator.getNickname()));
         applyOwner(target, bo.getOwnerUserId(), bo.getOwnerDeptId(), bo.getDirectSuperiorUserId());
-        target.setProfileCollectIntervalMin(defaultInt(bo.getProfileCollectIntervalMin(), 360));
-        target.setContentCollectIntervalMin(defaultInt(bo.getContentCollectIntervalMin(), 30));
+        target.setProfileCollectIntervalMin(defaultInt(bo.getProfileCollectIntervalMin(), DEFAULT_PROFILE_COLLECT_INTERVAL_MIN));
+        target.setContentCollectIntervalMin(normalizeContentCollectInterval(bo.getContentCollectIntervalMin()));
         target.setLastProfileCollectAt(now);
         target.setNextProfileCollectAt(addMinutes(now, target.getProfileCollectIntervalMin()));
         target.setNextContentCollectAt(addMinutes(now, target.getContentCollectIntervalMin()));
@@ -685,8 +860,8 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
         }
         target.setTargetName(defaultText(bo.getTargetName(), content.getTitle()));
         applyOwner(target, bo.getOwnerUserId(), bo.getOwnerDeptId(), bo.getDirectSuperiorUserId());
-        target.setProfileCollectIntervalMin(360);
-        target.setContentCollectIntervalMin(defaultInt(bo.getContentCollectIntervalMin(), 30));
+        target.setProfileCollectIntervalMin(DEFAULT_PROFILE_COLLECT_INTERVAL_MIN);
+        target.setContentCollectIntervalMin(normalizeContentCollectInterval(bo.getContentCollectIntervalMin()));
         target.setLastContentCollectAt(now);
         target.setNextContentCollectAt(addMinutes(now, target.getContentCollectIntervalMin()));
         target.setDataStatus("metrics_ready");
@@ -1088,7 +1263,7 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
     private Date addMinutes(Date date, Integer minutes) {
         Calendar calendar = Calendar.getInstance();
         calendar.setTime(date);
-        calendar.add(Calendar.MINUTE, defaultInt(minutes, 30));
+        calendar.add(Calendar.MINUTE, defaultInt(minutes, DEFAULT_CONTENT_COLLECT_INTERVAL_MIN));
         return calendar.getTime();
     }
 
@@ -1106,6 +1281,14 @@ public class CreatorMonitorCommandServiceImpl implements ICreatorMonitorCommandS
 
     private Integer defaultInt(Integer value, Integer fallback) {
         return value == null ? fallback : value;
+    }
+
+    private int normalizeContentCollectInterval(Integer value) {
+        int interval = defaultInt(value, DEFAULT_CONTENT_COLLECT_INTERVAL_MIN);
+        if (interval < MIN_CONTENT_COLLECT_INTERVAL_MIN || interval > MAX_CONTENT_COLLECT_INTERVAL_MIN) {
+            throw new ServiceException("内容监控刷新间隔需在 15 分钟到 24 小时之间");
+        }
+        return interval;
     }
 
     private String truncate(String value, int maxLength) {

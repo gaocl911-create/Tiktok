@@ -5,6 +5,7 @@ import org.dromara.common.core.exception.ServiceException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Maps TikHub Douyin JSON payloads into internal normalized profiles.
@@ -57,8 +58,10 @@ public class TikHubDouyinMapper {
 
     public TikHubContentProfile mapOneContent(JsonNode payload) {
         JsonNode data = TikHubJsonSupport.unwrapData(payload);
+        assertContentAvailable(data);
         List<JsonNode> posts = TikHubJsonSupport.findAwemeObjects(data, 1);
         JsonNode item = posts.isEmpty() ? data : posts.get(0);
+        assertContentAvailable(item);
         return mapContent(item, payload);
     }
 
@@ -72,6 +75,7 @@ public class TikHubDouyinMapper {
     }
 
     public TikHubContentProfile mapContent(JsonNode item, JsonNode rawPayload) {
+        assertContentAvailable(item);
         String awemeId = firstNotBlank(TikHubJsonSupport.findText(item, "aweme_id", "awemeId", "id", "id_str"));
         if (awemeId == null) {
             throw new ServiceException("TikHub content payload is missing aweme_id.");
@@ -111,6 +115,43 @@ public class TikHubDouyinMapper {
         }
         profile.setRawJson(TikHubJsonSupport.toJson(rawPayload));
         return profile;
+    }
+
+    private void assertContentAvailable(JsonNode node) {
+        JsonNode filterDetail = TikHubJsonSupport.findObject(node, "filter_detail");
+        if (filterDetail == null) {
+            return;
+        }
+        String reason = directText(filterDetail, "filter_reason", "reason");
+        String notice = directText(filterDetail, "notice");
+        String detail = directText(filterDetail, "detail_msg", "detail", "msg", "message");
+        if (!isUnavailableFilterDetail(reason, notice, detail)) {
+            return;
+        }
+        throw new ServiceException("TikHub content unavailable: {}",
+            firstNotBlank(reason, detail, notice, "filter_detail"));
+    }
+
+    private boolean isUnavailableFilterDetail(String... values) {
+        for (String value : values) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            String normalized = value.toLowerCase(Locale.ROOT);
+            if (normalized.contains("deleted")
+                || normalized.contains("self_see")
+                || normalized.contains("private")
+                || normalized.contains("unavailable")
+                || normalized.contains("status_")
+                || value.contains("作品不见")
+                || value.contains("已被删除")
+                || value.contains("无法观看")
+                || value.contains("不可见")
+                || value.contains("权限")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> missingMetrics(JsonNode node) {

@@ -10,6 +10,7 @@ import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.creator.domain.CmCollectionRun;
 import org.dromara.creator.domain.CmMonitorTarget;
+import org.dromara.creator.domain.bo.ContentCollectIntervalBo;
 import org.dromara.creator.domain.bo.MonitorTargetCreateBo;
 import org.dromara.creator.domain.vo.MonitorCreateResultVo;
 import org.dromara.creator.service.ICreatorMonitorCommandService;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -69,6 +71,22 @@ public class MonitorTargetController {
     @PostMapping("/{targetId}/collect")
     public R<MonitorCreateResultVo> collect(@NotNull(message = "targetId is required") @PathVariable Long targetId) {
         return R.ok(creatorMonitorCommandService.collectTargetNow(targetId, "manual"));
+    }
+
+    @SaCheckPermission("creator:target:add")
+    @PutMapping("/{targetId}/content-interval")
+    public R<Void> updateContentInterval(
+        @NotNull(message = "targetId is required") @PathVariable Long targetId,
+        @Valid @RequestBody ContentCollectIntervalBo bo
+    ) {
+        creatorMonitorCommandService.updateContentCollectInterval(targetId, bo.getContentCollectIntervalMin());
+        return R.ok();
+    }
+
+    @SaCheckPermission("creator:target:add")
+    @PutMapping("/content-interval/batch")
+    public R<Integer> batchUpdateContentInterval(@Valid @RequestBody ContentCollectIntervalBo bo) {
+        return R.ok(creatorMonitorCommandService.batchUpdateContentCollectInterval(bo.getContentCollectIntervalMin()));
     }
 
     @SaCheckPermission("creator:target:collect")

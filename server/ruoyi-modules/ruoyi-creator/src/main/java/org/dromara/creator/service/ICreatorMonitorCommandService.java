@@ -25,6 +25,22 @@ public interface ICreatorMonitorCommandService {
     MonitorCreateResultVo collectCreatorProfileNow(Long creatorId, String triggerSource);
 
     /**
+     * Update scheduled content metric collection interval for a monitor target.
+     *
+     * @param targetId monitor target id
+     * @param contentCollectIntervalMin interval in minutes
+     */
+    void updateContentCollectInterval(Long targetId, Integer contentCollectIntervalMin);
+
+    /**
+     * Update scheduled content metric collection interval for all accessible single content targets.
+     *
+     * @param contentCollectIntervalMin interval in minutes
+     * @return updated target count
+     */
+    Integer batchUpdateContentCollectInterval(Integer contentCollectIntervalMin);
+
+    /**
      * Update the contact WeChat account for the current user's creator monitor target.
      *
      * @param creatorId creator id whose monitor target should be updated
