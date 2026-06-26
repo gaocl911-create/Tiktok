@@ -47,27 +47,6 @@
         />
       </view>
 
-      <view class="field">
-        <text class="label">作品文案</text>
-        <textarea
-          v-model="form.contentDesc"
-          class="form-textarea"
-          placeholder="可填写作品标题、文案或备注，方便后台审核"
-          placeholder-class="placeholder"
-          maxlength="500"
-        />
-      </view>
-
-      <view class="field">
-        <text class="label">截图地址（可选）</text>
-        <input
-          v-model="form.screenshotUrl"
-          class="form-input"
-          placeholder="暂时填写图片链接，后续再接上传"
-          placeholder-class="placeholder"
-        />
-      </view>
-
       <wd-button block :loading="submitting" @click="submit">提交审核</wd-button>
     </view>
   </view>
@@ -87,8 +66,6 @@ const claimDetail = ref<TaskClaim | null>(null);
 
 const form = reactive({
   contentUrl: "",
-  contentDesc: "",
-  screenshotUrl: "",
 });
 
 const formatPlatform = (value?: string) => {
@@ -114,8 +91,6 @@ const submit = async () => {
   try {
     await submitTaskContent(claimId.value, {
       contentUrl: form.contentUrl.trim(),
-      contentDesc: form.contentDesc.trim(),
-      screenshotUrl: form.screenshotUrl.trim(),
     });
     uni.showToast({ title: "提交成功", icon: "success" });
     setTimeout(() => {
