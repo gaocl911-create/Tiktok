@@ -27,7 +27,7 @@
         </view>
 
         <view v-if="claimDetail.assignedImageUrl" class="image-box">
-          <image class="assigned-image" :src="claimDetail.assignedImageUrl" mode="aspectFill" @click="previewAssignedImage" />
+          <image class="assigned-image" :src="claimDetail.assignedImageUrl" mode="aspectFit" @click="previewAssignedImage" />
           <view class="image-actions">
             <wd-button plain size="small" @click="previewAssignedImage">预览图片</wd-button>
             <wd-button size="small" @click="saveAssignedImage">保存图片</wd-button>
@@ -268,8 +268,10 @@ onLoad((query) => {
 }
 
 .assigned-image {
-  width: 100%;
-  height: 420rpx;
+  display: block;
+  width: 88%;
+  height: 320rpx;
+  margin: 0 auto;
   background: #f8f7f3;
   border: 1rpx solid var(--cm-line);
   border-radius: 28rpx;
@@ -278,7 +280,8 @@ onLoad((query) => {
 .image-actions {
   display: flex;
   gap: 16rpx;
-  margin-top: 16rpx;
+  width: 88%;
+  margin: 16rpx auto 0;
 }
 
 .form-card {

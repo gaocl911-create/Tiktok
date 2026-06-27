@@ -52,13 +52,15 @@
       </view>
 
       <view class="meta-row">
-        <text>名额 {{ task.claimedCount || 0 }}/{{ task.totalQuota || 0 }}</text>
+        <text>{{ quotaText(task) }}</text>
+        <text>{{ claimLimitText(task) }}</text>
         <text>{{ formatEndTime(task.endTime) }}</text>
       </view>
 
       <wd-button
         block
         :plain="taskButtonPlain(task)"
+        :disabled="taskButtonDisabled(task)"
         :loading="claimingTaskId === idKey(task.taskId)"
         @click="handleTaskAction(task)"
       >
@@ -94,10 +96,26 @@ const total = ref(0);
 
 const idKey = (value?: number | string) => String(value ?? "");
 
-const claimByTaskId = computed(() => {
+const activeClaimStatuses: ClaimStatus[] = ["claimed", "submitted", "rejected"];
+
+const activeClaimByTaskId = computed(() => {
   const map = new Map<string, TaskClaim>();
   myClaims.value.forEach((claim) => {
-    map.set(idKey(claim.taskId), claim);
+    const taskId = idKey(claim.taskId);
+    if (!map.has(taskId) && activeClaimStatuses.includes(claim.claimStatus)) {
+      map.set(taskId, claim);
+    }
+  });
+  return map;
+});
+
+const latestClaimByTaskId = computed(() => {
+  const map = new Map<string, TaskClaim>();
+  myClaims.value.forEach((claim) => {
+    const taskId = idKey(claim.taskId);
+    if (!map.has(taskId)) {
+      map.set(taskId, claim);
+    }
   });
   return map;
 });
@@ -124,16 +142,26 @@ const qualificationHint = computed(() => {
 
 const qualificationButton = computed(() => (profileStatus.value === "pending" ? "查看资料" : "去完善"));
 
-const getClaim = (task: PromotionTask) => claimByTaskId.value.get(idKey(task.taskId));
+const getClaim = (task: PromotionTask) => activeClaimByTaskId.value.get(idKey(task.taskId)) || latestClaimByTaskId.value.get(idKey(task.taskId));
+const claimCountForTask = (task: PromotionTask) => myClaims.value.filter((claim) => idKey(claim.taskId) === idKey(task.taskId)).length;
 
-const canSubmit = (status?: ClaimStatus) => status === "claimed" || status === "rejected";
+const canClaimAgain = (task: PromotionTask) => {
+  if (task.claimLimitType === "unlimited") return true;
+  const claimedTimes = claimCountForTask(task);
+  if (task.claimLimitType === "limited") {
+    return claimedTimes < (task.claimLimitCount || 1);
+  }
+  return claimedTimes < 1;
+};
+
+const hasClaimedTask = (task: PromotionTask) => claimCountForTask(task) > 0;
 
 const claimLabel = (status?: ClaimStatus) => {
   const map: Record<ClaimStatus, string> = {
     claimed: "已领取",
-    submitted: "待审核",
-    approved: "已通过",
-    rejected: "已驳回",
+    submitted: "已领取",
+    approved: "已领取",
+    rejected: "已领取",
   };
   return status ? map[status] || status : "";
 };
@@ -141,27 +169,30 @@ const claimLabel = (status?: ClaimStatus) => {
 const claimTone = (status?: ClaimStatus) => {
   const map: Record<ClaimStatus, string> = {
     claimed: "",
-    submitted: "warning",
-    approved: "success",
-    rejected: "danger",
+    submitted: "",
+    approved: "",
+    rejected: "",
   };
   return status ? map[status] || "" : "";
 };
 
 const taskButtonText = (task: PromotionTask) => {
   if (profileStatus.value !== "approved") return "完善资料后领取";
-  const claim = getClaim(task);
-  if (!claim) return "领取任务";
-  const map: Record<ClaimStatus, string> = {
-    claimed: "提交作品链接",
-    submitted: "查看审核进度",
-    approved: "已通过，查看作品",
-    rejected: "重新提交作品",
-  };
-  return map[claim.claimStatus] || "查看任务";
+  if (hasClaimedTask(task)) {
+    return canClaimAgain(task) ? "继续领取" : "已领取";
+  }
+  return "领取任务";
 };
 
-const taskButtonPlain = (task: PromotionTask) => profileStatus.value !== "approved" || Boolean(getClaim(task));
+const taskButtonPlain = (task: PromotionTask) => {
+  if (profileStatus.value !== "approved") return true;
+  return hasClaimedTask(task) && !canClaimAgain(task);
+};
+
+const taskButtonDisabled = (task: PromotionTask) => {
+  if (profileStatus.value !== "approved") return false;
+  return hasClaimedTask(task) && !canClaimAgain(task);
+};
 
 const formatPlatform = (platform?: string) => {
   const map: Record<string, string> = {
@@ -179,6 +210,18 @@ const formatMoney = (value?: number | string) => {
 const formatEndTime = (value?: string) => {
   if (!value) return "长期有效";
   return `截止 ${value.slice(0, 10)}`;
+};
+
+const quotaText = (task: PromotionTask) => {
+  const approved = task.approvedCount || 0;
+  const total = task.totalQuota || 0;
+  return total <= 0 ? `通过 ${approved}/不限` : `通过 ${approved}/${total}`;
+};
+
+const claimLimitText = (task: PromotionTask) => {
+  if (task.claimLimitType === "unlimited") return "每人不限次";
+  if (task.claimLimitType === "limited") return `每人最多 ${task.claimLimitCount || 1} 次`;
+  return "每人一次";
 };
 
 const loadTasks = async (reset = false) => {
@@ -230,14 +273,6 @@ const loadTasks = async (reset = false) => {
 
 const refresh = () => loadTasks(true);
 
-const openSubmit = (claim: TaskClaim) => {
-  uni.navigateTo({
-    url: `/pages/works/submit?claimId=${encodeURIComponent(String(claim.claimId))}&taskTitle=${encodeURIComponent(
-      claim.taskTitle || "",
-    )}&platform=${encodeURIComponent(claim.platform || "")}`,
-  });
-};
-
 const handleTaskAction = async (task: PromotionTask) => {
   if (!hasToken()) {
     openProfile();
@@ -249,24 +284,16 @@ const handleTaskAction = async (task: PromotionTask) => {
     return;
   }
 
-  const existingClaim = getClaim(task);
-  if (existingClaim) {
-    if (canSubmit(existingClaim.claimStatus)) {
-      openSubmit(existingClaim);
-      return;
-    }
-    uni.switchTab({ url: "/pages/works/index" });
+  if (hasClaimedTask(task) && !canClaimAgain(task)) {
+    uni.showToast({ title: "该任务已领取，请到作品页处理", icon: "none" });
     return;
   }
 
   claimingTaskId.value = idKey(task.taskId);
   try {
     const claim = await claimTask(task.taskId);
-    myClaims.value = [claim, ...myClaims.value.filter((item) => idKey(item.taskId) !== idKey(task.taskId))];
-    uni.showToast({ title: "领取成功", icon: "success" });
-    setTimeout(() => {
-      openSubmit(claim);
-    }, 600);
+    myClaims.value = [claim, ...myClaims.value.filter((item) => idKey(item.claimId) !== idKey(claim.claimId))];
+    uni.showToast({ title: "领取成功，请到作品页提交", icon: "none" });
   } finally {
     claimingTaskId.value = null;
   }

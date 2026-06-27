@@ -49,7 +49,9 @@ create table if not exists pt_promotion_task
     task_desc               varchar(1000)   default null                comment 'task description',
     task_requirement        varchar(2000)   default null                comment 'publish/submission requirements',
     unit_price              decimal(10,2)   not null default 0.00       comment 'commission per approved submission',
-    total_quota             int             not null default 0          comment 'total claim quota',
+    total_quota             int             not null default 0          comment 'total approved quota, 0 means unlimited',
+    claim_limit_type        varchar(20)     not null default 'once'     comment 'per-user claim limit: once,limited,unlimited',
+    claim_limit_count       int             not null default 1          comment 'per-user max claim count when limited',
     claimed_count           int             not null default 0          comment 'claimed count',
     submitted_count         int             not null default 0          comment 'submitted count',
     approved_count          int             not null default 0          comment 'approved count',
@@ -94,10 +96,74 @@ create table if not exists pt_task_claim
     update_time             datetime        default null                comment 'update time',
     del_flag                char(1)         default '0'                 comment 'delete flag: 0 active, 1 deleted',
     primary key (claim_id),
-    unique key uk_pt_claim_task_user (tenant_id, task_id, user_id),
+    key idx_pt_claim_task_user (tenant_id, task_id, user_id, claim_status),
     key idx_pt_claim_profile (tenant_id, profile_id),
     key idx_pt_claim_status (tenant_id, claim_status)
 ) engine=innodb comment='part-time task claim record';
+
+-- Existing database upgrades for repeated task claims.
+set @has_claim_limit_type := (
+    select count(1)
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = 'pt_promotion_task'
+      and column_name = 'claim_limit_type'
+);
+set @ddl := if(@has_claim_limit_type = 0,
+    'alter table pt_promotion_task add column claim_limit_type varchar(20) not null default ''once'' comment ''per-user claim limit: once,limited,unlimited'' after total_quota',
+    'select 1');
+prepare stmt from @ddl;
+execute stmt;
+deallocate prepare stmt;
+
+set @has_claim_limit_count := (
+    select count(1)
+    from information_schema.columns
+    where table_schema = database()
+      and table_name = 'pt_promotion_task'
+      and column_name = 'claim_limit_count'
+);
+set @ddl := if(@has_claim_limit_count = 0,
+    'alter table pt_promotion_task add column claim_limit_count int not null default 1 comment ''per-user max claim count when limited'' after claim_limit_type',
+    'select 1');
+prepare stmt from @ddl;
+execute stmt;
+deallocate prepare stmt;
+
+update pt_promotion_task
+set claim_limit_type = ifnull(nullif(claim_limit_type, ''), 'once'),
+    claim_limit_count = ifnull(claim_limit_count, 1)
+where claim_limit_type is null
+   or claim_limit_type = ''
+   or claim_limit_count is null;
+
+set @has_unique_claim_task_user := (
+    select count(1)
+    from information_schema.statistics
+    where table_schema = database()
+      and table_name = 'pt_task_claim'
+      and index_name = 'uk_pt_claim_task_user'
+);
+set @ddl := if(@has_unique_claim_task_user > 0,
+    'alter table pt_task_claim drop index uk_pt_claim_task_user',
+    'select 1');
+prepare stmt from @ddl;
+execute stmt;
+deallocate prepare stmt;
+
+set @has_idx_claim_task_user := (
+    select count(1)
+    from information_schema.statistics
+    where table_schema = database()
+      and table_name = 'pt_task_claim'
+      and index_name = 'idx_pt_claim_task_user'
+);
+set @ddl := if(@has_idx_claim_task_user = 0,
+    'alter table pt_task_claim add key idx_pt_claim_task_user (tenant_id, task_id, user_id, claim_status)',
+    'select 1');
+prepare stmt from @ddl;
+execute stmt;
+deallocate prepare stmt;
 
 -- ----------------------------
 -- 1.3 Task submission table

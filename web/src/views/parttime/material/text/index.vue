@@ -9,6 +9,7 @@
           </div>
           <div class="header-actions">
             <el-button :icon="Refresh" :loading="loading" @click="getList">刷新</el-button>
+            <el-button v-hasPermi="['parttime:material:text:add']" :icon="Upload" @click="handleImport">导入文案</el-button>
             <el-button v-hasPermi="['parttime:material:text:add']" type="primary" :icon="Plus" @click="handleAdd">新增文案</el-button>
           </div>
         </div>
@@ -101,11 +102,51 @@
         <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="importDialogVisible" title="批量导入文案" width="520px" append-to-body>
+      <el-form ref="importFormRef" :model="importForm" :rules="importRules" label-width="86px">
+        <el-form-item label="文案分类" prop="categoryId">
+          <el-select v-model="importForm.categoryId" placeholder="请选择导入到哪个文案分类" filterable style="width: 100%">
+            <el-option v-for="item in categoryOptions" :key="item.categoryId" :label="item.categoryName" :value="item.categoryId" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <el-upload
+        ref="importUploadRef"
+        :limit="1"
+        accept=".xlsx,.xls"
+        :headers="importUpload.headers"
+        :action="textImportUrl"
+        :disabled="importUpload.isUploading"
+        :on-progress="handleImportProgress"
+        :on-success="handleImportSuccess"
+        :on-error="handleImportError"
+        :before-upload="beforeTextImportUpload"
+        :auto-upload="false"
+        drag
+      >
+        <el-icon class="el-icon--upload">
+          <UploadFilled />
+        </el-icon>
+        <div class="el-upload__text">将 Excel 文件拖到此处，或 <em>点击上传</em></div>
+        <template #tip>
+          <div class="text-center el-upload__tip">
+            <span>仅允许 xls、xlsx 文件。Excel 里只需要填写文案内容，排序/状态/备注可选。</span>
+            <el-link type="primary" :underline="false" style="font-size: 12px; vertical-align: baseline" @click="importTemplate">下载模板</el-link>
+          </div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="importDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importUpload.isUploading" @click="submitImportFile">开始导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ParttimeMaterialText" lang="ts">
-import { Plus, Refresh, Search } from '@element-plus/icons-vue';
+import { Plus, Refresh, Search, Upload, UploadFilled } from '@element-plus/icons-vue';
+import { globalHeaders } from '@/utils/request';
 import { listMaterialCategoryOptions } from '@/api/parttime/material/category';
 import { addMaterialText, deleteMaterialText, listMaterialTexts, updateMaterialText } from '@/api/parttime/material/text';
 import type { PtMaterialCategory, PtMaterialText, PtMaterialTextForm, PtMaterialTextQuery } from '@/api/parttime/material/types';
@@ -115,11 +156,14 @@ const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
 const submitting = ref(false);
 const dialogVisible = ref(false);
+const importDialogVisible = ref(false);
 const textList = ref<PtMaterialText[]>([]);
 const categoryOptions = ref<PtMaterialCategory[]>([]);
 const total = ref(0);
 const queryFormRef = ref<ElFormInstance>();
 const textFormRef = ref<ElFormInstance>();
+const importFormRef = ref<ElFormInstance>();
+const importUploadRef = ref<ElUploadInstance>();
 
 const queryParams = reactive<PtMaterialTextQuery>({
   pageNum: 1,
@@ -139,9 +183,24 @@ const defaultForm = (): PtMaterialTextForm => ({
 
 const form = reactive<PtMaterialTextForm>(defaultForm());
 
+const importForm = reactive<{ categoryId?: string | number }>({
+  categoryId: undefined
+});
+
+const importUpload = reactive({
+  isUploading: false,
+  headers: globalHeaders()
+});
+
+const textImportUrl = computed(() => `${import.meta.env.VITE_APP_BASE_API}/parttime/material/text/importData?categoryId=${importForm.categoryId || ''}`);
+
 const rules: ElFormRules = {
   categoryId: [{ required: true, message: '请选择文案分类', trigger: 'change' }],
   content: [{ required: true, message: '请输入文案内容', trigger: 'blur' }]
+};
+
+const importRules: ElFormRules = {
+  categoryId: [{ required: true, message: '请选择文案分类', trigger: 'change' }]
 };
 
 const statusLabel = (status?: string) => (status === '0' ? '启用' : '停用');
@@ -222,6 +281,58 @@ const handleDelete = async (row: PtMaterialText) => {
   await getList();
 };
 
+const handleImport = () => {
+  importForm.categoryId = queryParams.categoryId || undefined;
+  importUpload.headers = globalHeaders();
+  importUpload.isUploading = false;
+  importUploadRef.value?.clearFiles();
+  importFormRef.value?.clearValidate();
+  importDialogVisible.value = true;
+};
+
+const importTemplate = () => {
+  proxy?.download('parttime/material/text/importTemplate', {}, `material_text_template_${new Date().getTime()}.xlsx`);
+};
+
+const beforeTextImportUpload = (file: File) => {
+  if (!importForm.categoryId) {
+    proxy?.$modal.msgError('请先选择文案分类');
+    return false;
+  }
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  if (!['xls', 'xlsx'].includes(ext || '')) {
+    proxy?.$modal.msgError('请上传 xls 或 xlsx 格式文件');
+    return false;
+  }
+  return true;
+};
+
+const handleImportProgress = () => {
+  importUpload.isUploading = true;
+};
+
+const handleImportSuccess = async (response: any, file: UploadFile) => {
+  importUpload.isUploading = false;
+  importUploadRef.value?.handleRemove(file);
+  if (response.code !== 200) {
+    proxy?.$modal.msgError(response.msg || '导入失败');
+    return;
+  }
+  importDialogVisible.value = false;
+  proxy?.$modal.msgSuccess(response.msg || '导入成功');
+  await getList();
+};
+
+const handleImportError = () => {
+  importUpload.isUploading = false;
+  proxy?.$modal.msgError('导入失败，请稍后重试');
+};
+
+const submitImportFile = async () => {
+  await importFormRef.value?.validate();
+  importUploadRef.value?.submit();
+};
+
 onMounted(async () => {
   await loadOptions();
   await getList();
@@ -264,5 +375,12 @@ onMounted(async () => {
 
 .form-tip {
   margin-left: 10px;
+}
+
+.el-upload__tip {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 </style>

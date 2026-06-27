@@ -48,9 +48,14 @@
             <strong class="money">￥{{ formatMoney(row.unitPrice) }}</strong>
           </template>
         </el-table-column>
-        <el-table-column label="名额" width="170" align="center">
+        <el-table-column label="通过名额" width="170" align="center">
           <template #default="{ row }">
-            <span>{{ row.claimedCount || 0 }} / {{ row.totalQuota }}</span>
+            <span>{{ quotaLabel(row) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="每人领取" width="140" align="center">
+          <template #default="{ row }">
+            <el-tag type="info">{{ claimLimitLabel(row) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="提交/通过" width="140" align="center">
@@ -132,8 +137,25 @@
           <el-input-number v-model="form.unitPrice" :precision="2" :min="0" :step="1" style="width: 180px" />
           <span class="form-tip">元 / 审核通过作品</span>
         </el-form-item>
-        <el-form-item label="名额" prop="totalQuota">
-          <el-input-number v-model="form.totalQuota" :min="1" :step="1" :precision="0" style="width: 180px" />
+        <el-form-item label="通过名额" prop="totalQuota">
+          <el-input-number v-model="form.totalQuota" :min="0" :step="1" :precision="0" style="width: 180px" />
+          <span class="form-tip">0 表示不限，达到通过名额后任务自动下线</span>
+        </el-form-item>
+        <el-form-item label="每人领取" prop="claimLimitType">
+          <el-select v-model="form.claimLimitType" style="width: 180px">
+            <el-option label="仅一次" value="once" />
+            <el-option label="限制次数" value="limited" />
+            <el-option label="不限次数" value="unlimited" />
+          </el-select>
+          <el-input-number
+            v-if="form.claimLimitType === 'limited'"
+            v-model="form.claimLimitCount"
+            :min="1"
+            :step="1"
+            :precision="0"
+            style="width: 160px; margin-left: 10px"
+          />
+          <span class="form-tip">用户通过后，可按规则再次领取同一任务</span>
         </el-form-item>
         <el-form-item label="文案分类" prop="textCategoryId">
           <el-select v-model="form.textCategoryId" placeholder="请选择文案分类" filterable style="width: 100%">
@@ -223,6 +245,8 @@ const defaultForm = (): PtPromotionTaskForm => ({
   taskRequirement: '',
   unitPrice: 0,
   totalQuota: 10,
+  claimLimitType: 'once',
+  claimLimitCount: 1,
   textCategoryId: undefined,
   imageCategoryId: undefined,
   startTime: '',
@@ -237,6 +261,7 @@ const rules: ElFormRules = {
   platform: [{ required: true, message: '请选择平台', trigger: 'change' }],
   unitPrice: [{ required: true, message: '请输入任务单价', trigger: 'blur' }],
   totalQuota: [{ required: true, message: '请输入任务名额', trigger: 'blur' }],
+  claimLimitType: [{ required: true, message: '请选择每人领取限制', trigger: 'change' }],
   textCategoryId: [{ required: true, message: '请选择文案分类', trigger: 'change' }],
   imageCategoryId: [{ required: true, message: '请选择图片分类', trigger: 'change' }]
 };
@@ -267,6 +292,16 @@ const formatMoney = (value?: number) => Number(value || 0).toFixed(2);
 const formatTime = (value?: string) => (value ? proxy?.parseTime(value) || value : '--');
 const canEdit = (row: PtPromotionTask) => row.taskStatus === 'draft' || row.taskStatus === 'paused';
 const canPublish = (row: PtPromotionTask) => row.taskStatus === 'draft' || row.taskStatus === 'paused';
+const quotaLabel = (row: PtPromotionTask) => {
+  const approved = row.approvedCount || 0;
+  const total = row.totalQuota || 0;
+  return total <= 0 ? `${approved} / 不限` : `${approved} / ${total}`;
+};
+const claimLimitLabel = (row: PtPromotionTask) => {
+  if (row.claimLimitType === 'unlimited') return '不限次数';
+  if (row.claimLimitType === 'limited') return `最多 ${row.claimLimitCount || 1} 次`;
+  return '仅一次';
+};
 
 const getList = async () => {
   loading.value = true;
@@ -316,7 +351,9 @@ const handleEdit = (row: PtPromotionTask) => {
     taskDesc: row.taskDesc || '',
     taskRequirement: row.taskRequirement || '',
     unitPrice: Number(row.unitPrice || 0),
-    totalQuota: Number(row.totalQuota || 1),
+    totalQuota: Number(row.totalQuota || 0),
+    claimLimitType: row.claimLimitType === 'limited' || row.claimLimitType === 'unlimited' ? row.claimLimitType : 'once',
+    claimLimitCount: Number(row.claimLimitCount || 1),
     textCategoryId: row.textCategoryId,
     imageCategoryId: row.imageCategoryId,
     startTime: row.startTime || '',
@@ -332,6 +369,11 @@ const submitForm = async () => {
   const [startTime, endTime] = timeRange.value;
   form.startTime = startTime || '';
   form.endTime = endTime || '';
+  if (form.claimLimitType === 'once') {
+    form.claimLimitCount = 1;
+  } else if (form.claimLimitType === 'unlimited') {
+    form.claimLimitCount = 0;
+  }
   submitting.value = true;
   try {
     if (form.taskId) {

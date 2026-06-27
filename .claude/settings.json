@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/test-features.mjs)",
+      "Bash(ADMIN_TOKEN=fake-token node scripts/test-features.mjs)",
+      "Bash(node scripts/gen-text-templates.mjs)"
+    ]
+  }
+}

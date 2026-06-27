@@ -29,6 +29,7 @@ public class PtTaskClaimVo implements Serializable {
     private String realName;
     private String phone;
 
+    private Integer claimRound;
     private Integer assignIndex;
     private Long textId;
     private String assignedText;

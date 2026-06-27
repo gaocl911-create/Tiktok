@@ -19,7 +19,7 @@ public interface IPtTaskParticipationService {
 
     PtTaskClaimVo queryMyClaimById(Long claimId);
 
-    TableDataInfo<PtTaskClaimVo> queryMyClaimPage(PageQuery pageQuery);
+    TableDataInfo<PtTaskClaimVo> queryMyClaimPage(PageQuery pageQuery, String group);
 
     PtTaskSubmissionVo submitContent(PtTaskSubmissionBo bo);
 

@@ -6,6 +6,17 @@
       <text class="subtitle">跟踪已领取任务、作品提交状态和后台审核结果。</text>
     </view>
 
+    <view v-if="!needLogin" class="work-segment">
+      <view
+        v-for="item in groupOptions"
+        :key="item.value"
+        :class="['segment-item', { active: activeGroup === item.value }]"
+        @click="switchGroup(item.value)"
+      >
+        {{ item.label }}
+      </view>
+    </view>
+
     <view v-if="needLogin" class="surface state-card">
       <view class="empty-mark">登</view>
       <text class="empty-title">请先登录</text>
@@ -19,8 +30,8 @@
 
     <view v-else-if="claims.length === 0" class="surface state-card">
       <view class="empty-mark">作</view>
-      <text class="empty-title">还没有领取任务</text>
-      <text class="muted">先去任务广场领取任务，发布作品后再回来提交链接。</text>
+      <text class="empty-title">{{ emptyTitle }}</text>
+      <text class="muted">{{ emptyDesc }}</text>
       <wd-button @click="openTasks">去任务广场</wd-button>
     </view>
 
@@ -34,6 +45,10 @@
       </view>
 
       <view class="info-list">
+        <view v-if="claim.claimRound || claim.assignIndex" class="info-row assignment-row">
+          <text>领取/素材</text>
+          <text>{{ assignmentText(claim) }}</text>
+        </view>
         <view class="info-row">
           <text>领取时间</text>
           <text>{{ formatTime(claim.claimTime) }}</text>
@@ -53,11 +68,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { onPullDownRefresh, onReachBottom, onShow } from "@dcloudio/uni-app";
-import { listMyTasks, type ClaimStatus, type TaskClaim } from "@/api/task";
+import { listMyTasks, type ClaimStatus, type TaskClaim, type TaskClaimGroup } from "@/api/task";
 import { hasToken } from "@/utils/request";
 
+const groupOptions: Array<{ label: string; value: TaskClaimGroup }> = [
+  { label: "待提交", value: "pending" },
+  { label: "已完成", value: "completed" },
+];
+const activeGroup = ref<TaskClaimGroup>("pending");
 const claims = ref<TaskClaim[]>([]);
 const loading = ref(false);
 const needLogin = ref(!hasToken());
@@ -86,6 +106,19 @@ const statusTone = (status: ClaimStatus) => {
 };
 
 const canSubmit = (status: ClaimStatus) => status === "claimed" || status === "rejected";
+const emptyTitle = computed(() => (activeGroup.value === "pending" ? "暂无待提交作品" : "暂无已完成作品"));
+const emptyDesc = computed(() =>
+  activeGroup.value === "pending"
+    ? "当前没有需要提交链接的任务，去任务广场继续领取吧。"
+    : "提交并通过审核后的作品会沉淀在这里。",
+);
+
+const assignmentText = (claim: TaskClaim) => {
+  const parts: string[] = [];
+  if (claim.claimRound) parts.push(`第 ${claim.claimRound} 次领取`);
+  if (claim.assignIndex) parts.push(`素材 #${claim.assignIndex}`);
+  return parts.join(" / ");
+};
 
 const formatPlatform = (platform?: string) => {
   const map: Record<string, string> = {
@@ -107,7 +140,7 @@ const loadClaims = async (reset = false) => {
   loading.value = true;
   try {
     if (reset) pageNum.value = 1;
-    const page = await listMyTasks({ pageNum: pageNum.value, pageSize });
+    const page = await listMyTasks({ pageNum: pageNum.value, pageSize, group: activeGroup.value });
     total.value = page.total || 0;
     claims.value = reset ? page.rows || [] : [...claims.value, ...(page.rows || [])];
   } catch {
@@ -122,6 +155,15 @@ const loadClaims = async (reset = false) => {
     loading.value = false;
     uni.stopPullDownRefresh();
   }
+};
+
+const switchGroup = (group: TaskClaimGroup) => {
+  if (activeGroup.value === group) return;
+  activeGroup.value = group;
+  claims.value = [];
+  total.value = 0;
+  pageNum.value = 1;
+  loadClaims(true);
 };
 
 const openTasks = () => {
@@ -151,6 +193,34 @@ onReachBottom(() => {
 </script>
 
 <style scoped lang="scss">
+.work-segment {
+  display: flex;
+  gap: 8rpx;
+  margin: 0 0 24rpx;
+  padding: 8rpx;
+  background: #f1f0ec;
+  border: 1rpx solid var(--cm-line);
+  border-radius: 22rpx;
+}
+
+.segment-item {
+  flex: 1;
+  min-height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cm-muted);
+  font-size: 26rpx;
+  font-weight: 800;
+  border-radius: 16rpx;
+}
+
+.segment-item.active {
+  color: var(--cm-ink);
+  background: #fff;
+  box-shadow: 0 6rpx 18rpx rgba(16, 16, 16, 0.08);
+}
+
 .work-card {
   padding: 32rpx;
   margin-bottom: 24rpx;
@@ -198,6 +268,11 @@ onReachBottom(() => {
   color: var(--cm-muted);
   font-size: 24rpx;
   line-height: 1.7;
+}
+
+.assignment-row {
+  color: var(--cm-ink);
+  font-weight: 800;
 }
 
 .info-row + .info-row {

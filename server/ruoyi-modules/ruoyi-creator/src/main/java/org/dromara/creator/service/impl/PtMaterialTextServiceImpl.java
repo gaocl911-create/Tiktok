@@ -11,6 +11,7 @@ import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.creator.domain.PtMaterialCategory;
 import org.dromara.creator.domain.PtMaterialText;
 import org.dromara.creator.domain.bo.PtMaterialTextBo;
+import org.dromara.creator.domain.vo.PtMaterialTextImportVo;
 import org.dromara.creator.domain.vo.PtMaterialTextVo;
 import org.dromara.creator.mapper.PtMaterialCategoryMapper;
 import org.dromara.creator.mapper.PtMaterialTextMapper;
@@ -28,6 +29,7 @@ public class PtMaterialTextServiceImpl implements IPtMaterialTextService {
 
     private static final String TYPE_TEXT = "text";
     private static final String STATUS_ENABLED = "0";
+    private static final String STATUS_DISABLED = "1";
 
     private final PtMaterialTextMapper ptMaterialTextMapper;
     private final PtMaterialCategoryMapper ptMaterialCategoryMapper;
@@ -85,6 +87,37 @@ public class PtMaterialTextServiceImpl implements IPtMaterialTextService {
         return ptMaterialTextMapper.deleteBatchIds(Arrays.asList(textIds)) > 0;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int importTexts(Long categoryId, List<PtMaterialTextImportVo> rows) {
+        ensureTextCategory(categoryId);
+        if (rows == null || rows.isEmpty()) {
+            throw new ServiceException("未读取到可导入的文案数据");
+        }
+
+        int nextSort = nextSort(categoryId);
+        int count = 0;
+        for (PtMaterialTextImportVo row : rows) {
+            if (row == null || StringUtils.isBlank(row.getContent())) {
+                continue;
+            }
+
+            PtMaterialText text = new PtMaterialText();
+            text.setCategoryId(categoryId);
+            text.setContent(row.getContent().trim());
+            text.setSort(row.getSort() == null ? nextSort++ : row.getSort());
+            text.setStatus(normalizeStatus(row.getStatus()));
+            text.setRemark(row.getRemark());
+            ptMaterialTextMapper.insert(text);
+            count++;
+        }
+
+        if (count == 0) {
+            throw new ServiceException("未读取到有效文案，请至少填写一行文案内容");
+        }
+        return count;
+    }
+
     private void copyBo(PtMaterialText text, PtMaterialTextBo bo) {
         text.setCategoryId(bo.getCategoryId());
         text.setContent(bo.getContent());
@@ -98,6 +131,28 @@ public class PtMaterialTextServiceImpl implements IPtMaterialTextService {
         if (category == null || !TYPE_TEXT.equals(category.getCategoryType())) {
             throw new ServiceException("请选择有效的文案分类");
         }
+    }
+
+    private String normalizeStatus(String status) {
+        if (StringUtils.isBlank(status)) {
+            return STATUS_ENABLED;
+        }
+        String value = status.trim();
+        if (STATUS_DISABLED.equals(value) || "停用".equals(value) || "禁用".equals(value)) {
+            return STATUS_DISABLED;
+        }
+        return STATUS_ENABLED;
+    }
+
+    private int nextSort(Long categoryId) {
+        PtMaterialText latest = ptMaterialTextMapper.selectOne(Wrappers.<PtMaterialText>lambdaQuery()
+            .eq(PtMaterialText::getCategoryId, categoryId)
+            .orderByDesc(PtMaterialText::getSort)
+            .last("limit 1"));
+        if (latest == null || latest.getSort() == null) {
+            return 0;
+        }
+        return latest.getSort() + 1;
     }
 
     private PtMaterialTextVo toVo(PtMaterialText text) {

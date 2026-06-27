@@ -28,6 +28,8 @@ public class PtPromotionTask extends TenantEntity {
     private String taskRequirement;
     private BigDecimal unitPrice;
     private Integer totalQuota;
+    private String claimLimitType;
+    private Integer claimLimitCount;
     private Integer claimedCount;
     private Integer submittedCount;
     private Integer approvedCount;

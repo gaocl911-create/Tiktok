@@ -1,4 +1,5 @@
 export type PromotionTaskStatus = 'draft' | 'published' | 'paused' | 'finished';
+export type PromotionTaskClaimLimitType = 'once' | 'limited' | 'unlimited';
 
 export interface PtPromotionTask extends BaseEntity {
   taskId: string | number;
@@ -9,6 +10,8 @@ export interface PtPromotionTask extends BaseEntity {
   taskRequirement?: string;
   unitPrice: number;
   totalQuota: number;
+  claimLimitType?: PromotionTaskClaimLimitType | string;
+  claimLimitCount?: number;
   claimedCount?: number;
   submittedCount?: number;
   approvedCount?: number;
@@ -39,6 +42,8 @@ export interface PtPromotionTaskForm {
   taskRequirement?: string;
   unitPrice: number;
   totalQuota: number;
+  claimLimitType: PromotionTaskClaimLimitType;
+  claimLimitCount: number;
   startTime?: string;
   endTime?: string;
   textCategoryId?: string | number;

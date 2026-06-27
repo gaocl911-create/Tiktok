@@ -28,6 +28,9 @@ public class PtPromotionTaskServiceImpl implements IPtPromotionTaskService {
     private static final String STATUS_PUBLISHED = "published";
     private static final String STATUS_PAUSED = "paused";
     private static final String STATUS_FINISHED = "finished";
+    private static final String CLAIM_LIMIT_ONCE = "once";
+    private static final String CLAIM_LIMIT_LIMITED = "limited";
+    private static final String CLAIM_LIMIT_UNLIMITED = "unlimited";
     private static final String CATEGORY_TEXT = "text";
     private static final String CATEGORY_IMAGE = "image";
     private static final String MATERIAL_ENABLED = "0";
@@ -85,8 +88,9 @@ public class PtPromotionTaskServiceImpl implements IPtPromotionTaskService {
         if (!STATUS_DRAFT.equals(task.getTaskStatus()) && !STATUS_PAUSED.equals(task.getTaskStatus())) {
             throw new ServiceException("仅草稿或已暂停任务允许编辑，请先暂停任务");
         }
-        if (task.getClaimedCount() != null && task.getClaimedCount() > 0 && bo.getTotalQuota() < task.getClaimedCount()) {
-            throw new ServiceException("任务名额不能小于已领取数量");
+        int approvedCount = task.getApprovedCount() == null ? 0 : task.getApprovedCount();
+        if (bo.getTotalQuota() != null && bo.getTotalQuota() > 0 && bo.getTotalQuota() < approvedCount) {
+            throw new ServiceException("任务名额不能小于已通过数量");
         }
         copyBo(task, bo);
         task.setPlatform(defaultPlatform(bo.getPlatform()));
@@ -151,9 +155,32 @@ public class PtPromotionTaskServiceImpl implements IPtPromotionTaskService {
         task.setTaskRequirement(bo.getTaskRequirement());
         task.setUnitPrice(bo.getUnitPrice() == null ? BigDecimal.ZERO : bo.getUnitPrice());
         task.setTotalQuota(bo.getTotalQuota());
+        applyClaimLimit(task, bo);
         task.setStartTime(bo.getStartTime());
         task.setEndTime(bo.getEndTime());
         task.setRemark(bo.getRemark());
+    }
+
+    private void applyClaimLimit(PtPromotionTask task, PtPromotionTaskBo bo) {
+        String limitType = bo.getClaimLimitType();
+        if (limitType == null || limitType.isBlank()) {
+            limitType = CLAIM_LIMIT_ONCE;
+        }
+        if (!CLAIM_LIMIT_ONCE.equals(limitType)
+            && !CLAIM_LIMIT_LIMITED.equals(limitType)
+            && !CLAIM_LIMIT_UNLIMITED.equals(limitType)) {
+            throw new ServiceException("每人领取限制配置不正确");
+        }
+        int limitCount = bo.getClaimLimitCount() == null ? 0 : bo.getClaimLimitCount();
+        if (CLAIM_LIMIT_ONCE.equals(limitType)) {
+            limitCount = 1;
+        } else if (CLAIM_LIMIT_UNLIMITED.equals(limitType)) {
+            limitCount = 0;
+        } else if (limitCount < 1) {
+            throw new ServiceException("限制领取时，每人领取次数至少为1");
+        }
+        task.setClaimLimitType(limitType);
+        task.setClaimLimitCount(limitCount);
     }
 
     private String defaultPlatform(String platform) {
@@ -173,8 +200,12 @@ public class PtPromotionTaskServiceImpl implements IPtPromotionTaskService {
         if (task.getUnitPrice() == null || task.getUnitPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new ServiceException("任务单价不能小于0");
         }
-        if (task.getTotalQuota() == null || task.getTotalQuota() <= 0) {
-            throw new ServiceException("任务名额必须大于0");
+        if (task.getTotalQuota() == null || task.getTotalQuota() < 0) {
+            throw new ServiceException("任务名额不能小于0");
+        }
+        if (CLAIM_LIMIT_LIMITED.equals(task.getClaimLimitType())
+            && (task.getClaimLimitCount() == null || task.getClaimLimitCount() < 1)) {
+            throw new ServiceException("限制领取时，每人领取次数至少为1");
         }
         if (task.getEndTime() != null && task.getEndTime().before(new Date())) {
             throw new ServiceException("截止时间已过，不能发布任务");

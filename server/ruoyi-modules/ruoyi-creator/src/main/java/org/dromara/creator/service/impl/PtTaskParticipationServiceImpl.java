@@ -46,6 +46,12 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
     private static final String CLAIM_SUBMITTED = "submitted";
     private static final String CLAIM_APPROVED = "approved";
     private static final String CLAIM_REJECTED = "rejected";
+    private static final String CLAIM_CANCELLED = "cancelled";
+    private static final String CLAIM_LIMIT_ONCE = "once";
+    private static final String CLAIM_LIMIT_LIMITED = "limited";
+    private static final String CLAIM_LIMIT_UNLIMITED = "unlimited";
+    private static final String CLAIM_GROUP_PENDING = "pending";
+    private static final String CLAIM_GROUP_COMPLETED = "completed";
     private static final String SUBMISSION_PENDING = "pending";
     private static final String SUBMISSION_APPROVED = "approved";
     private static final String SUBMISSION_REJECTED = "rejected";
@@ -67,6 +73,7 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         lqw.like(StringUtils.isNotBlank(query.getTaskTitle()), PtPromotionTask::getTaskTitle, query.getTaskTitle());
         lqw.and(wrapper -> wrapper.isNull(PtPromotionTask::getStartTime).or().le(PtPromotionTask::getStartTime, now));
         lqw.and(wrapper -> wrapper.isNull(PtPromotionTask::getEndTime).or().ge(PtPromotionTask::getEndTime, now));
+        lqw.apply("(total_quota = 0 or approved_count < total_quota)");
         lqw.orderByDesc(PtPromotionTask::getPublishTime);
         return TableDataInfo.build(ptPromotionTaskMapper.selectPage(pageQuery.build(), lqw));
     }
@@ -87,16 +94,9 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         PtPromotionTask task = getTaskForUpdate(taskId);
         ensureTaskCanClaim(task);
 
-        PtTaskClaim existing = findClaim(taskId, LoginHelper.getUserId());
-        if (existing != null) {
-            return toClaimVo(existing);
-        }
+        ensureUserCanClaimAgain(task, LoginHelper.getUserId());
 
         int claimedCount = task.getClaimedCount() == null ? 0 : task.getClaimedCount();
-        int totalQuota = task.getTotalQuota() == null ? 0 : task.getTotalQuota();
-        if (claimedCount >= totalQuota) {
-            throw new ServiceException("任务名额已满");
-        }
 
         Date now = new Date();
         PtTaskClaim claim = new PtTaskClaim();
@@ -125,9 +125,14 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
     }
 
     @Override
-    public TableDataInfo<PtTaskClaimVo> queryMyClaimPage(PageQuery pageQuery) {
+    public TableDataInfo<PtTaskClaimVo> queryMyClaimPage(PageQuery pageQuery, String group) {
         LambdaQueryWrapper<PtTaskClaim> lqw = Wrappers.lambdaQuery();
         lqw.eq(PtTaskClaim::getUserId, LoginHelper.getUserId());
+        if (CLAIM_GROUP_PENDING.equals(group)) {
+            lqw.in(PtTaskClaim::getClaimStatus, List.of(CLAIM_CLAIMED, CLAIM_REJECTED));
+        } else if (CLAIM_GROUP_COMPLETED.equals(group)) {
+            lqw.in(PtTaskClaim::getClaimStatus, List.of(CLAIM_SUBMITTED, CLAIM_APPROVED));
+        }
         lqw.orderByDesc(PtTaskClaim::getCreateTime);
         Page<PtTaskClaim> page = ptTaskClaimMapper.selectPage(pageQuery.build(), lqw);
         List<PtTaskClaimVo> rows = page.getRecords().stream().map(this::toClaimVo).toList();
@@ -154,8 +159,12 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         if (!TASK_PUBLISHED.equals(task.getTaskStatus())) {
             throw new ServiceException("任务当前不可提交");
         }
+        ensureTaskInTime(task);
 
         String contentUrl = normalizeContentUrl(bo.getContentUrl());
+        if (hasAcceptedContentUrl(task.getTaskId(), contentUrl)) {
+            throw new ServiceException("该作品链接已提交过，请勿重复提交");
+        }
         Date now = new Date();
         PtTaskSubmission submission = new PtTaskSubmission();
         submission.setTenantId(LoginHelper.getTenantId());
@@ -207,7 +216,10 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         if (!SUBMISSION_PENDING.equals(submission.getSubmissionStatus())) {
             throw new ServiceException("只能审核待审核作品");
         }
-        PtPromotionTask task = getTask(submission.getTaskId());
+        PtPromotionTask task = getTaskForUpdate(submission.getTaskId());
+        if (isQuotaReached(task)) {
+            throw new ServiceException("任务通过名额已满，不能继续审核通过");
+        }
         ContentLinkCreateBo bo = new ContentLinkCreateBo();
         bo.setPlatform(defaultPlatform(submission.getPlatform()));
         bo.setContentInput(submission.getContentUrl());
@@ -236,7 +248,12 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         claim.setFinishTime(now);
         ptTaskClaimMapper.updateById(claim);
 
-        task.setApprovedCount((task.getApprovedCount() == null ? 0 : task.getApprovedCount()) + 1);
+        int approvedCount = (task.getApprovedCount() == null ? 0 : task.getApprovedCount()) + 1;
+        task.setApprovedCount(approvedCount);
+        if (task.getTotalQuota() != null && task.getTotalQuota() > 0 && approvedCount >= task.getTotalQuota()) {
+            task.setTaskStatus("finished");
+            task.setFinishTime(now);
+        }
         ptPromotionTaskMapper.updateById(task);
         return toSubmissionVo(submission);
     }
@@ -313,12 +330,22 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         return submission;
     }
 
-    private PtTaskClaim findClaim(Long taskId, Long userId) {
+    private void ensureUserCanClaimAgain(PtPromotionTask task, Long userId) {
+        String limitType = StringUtils.isBlank(task.getClaimLimitType()) ? CLAIM_LIMIT_ONCE : task.getClaimLimitType();
+        if (CLAIM_LIMIT_UNLIMITED.equals(limitType)) {
+            return;
+        }
+        int limitCount = CLAIM_LIMIT_LIMITED.equals(limitType)
+            ? Math.max(task.getClaimLimitCount() == null ? 0 : task.getClaimLimitCount(), 1)
+            : 1;
         LambdaQueryWrapper<PtTaskClaim> lqw = Wrappers.lambdaQuery();
-        lqw.eq(PtTaskClaim::getTaskId, taskId);
+        lqw.eq(PtTaskClaim::getTaskId, task.getTaskId());
         lqw.eq(PtTaskClaim::getUserId, userId);
-        lqw.last("limit 1");
-        return ptTaskClaimMapper.selectOne(lqw);
+        lqw.ne(PtTaskClaim::getClaimStatus, CLAIM_CANCELLED);
+        long claimedTimes = ptTaskClaimMapper.selectCount(lqw);
+        if (claimedTimes >= limitCount) {
+            throw new ServiceException("已达到该任务的每人领取次数上限");
+        }
     }
 
     private boolean hasPendingSubmission(Long claimId) {
@@ -329,17 +356,42 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         return ptTaskSubmissionMapper.selectOne(lqw) != null;
     }
 
+    private boolean hasAcceptedContentUrl(Long taskId, String contentUrl) {
+        LambdaQueryWrapper<PtTaskSubmission> lqw = Wrappers.lambdaQuery();
+        lqw.eq(PtTaskSubmission::getTaskId, taskId);
+        lqw.eq(PtTaskSubmission::getContentUrl, contentUrl);
+        lqw.ne(PtTaskSubmission::getSubmissionStatus, SUBMISSION_REJECTED);
+        lqw.last("limit 1");
+        return ptTaskSubmissionMapper.selectOne(lqw) != null;
+    }
+
     private void ensureTaskCanClaim(PtPromotionTask task) {
-        Date now = new Date();
         if (!TASK_PUBLISHED.equals(task.getTaskStatus())) {
             throw new ServiceException("任务未发布，暂不能领取");
         }
+        ensureTaskInTime(task);
+        if (isQuotaReached(task)) {
+            throw new ServiceException("任务名额已满");
+        }
+    }
+
+    private void ensureTaskInTime(PtPromotionTask task) {
+        Date now = new Date();
         if (task.getStartTime() != null && task.getStartTime().after(now)) {
             throw new ServiceException("任务尚未开始");
         }
         if (task.getEndTime() != null && task.getEndTime().before(now)) {
             throw new ServiceException("任务已截止");
         }
+    }
+
+    private boolean isQuotaReached(PtPromotionTask task) {
+        int totalQuota = task.getTotalQuota() == null ? 0 : task.getTotalQuota();
+        if (totalQuota <= 0) {
+            return false;
+        }
+        int approvedCount = task.getApprovedCount() == null ? 0 : task.getApprovedCount();
+        return approvedCount >= totalQuota;
     }
 
     private PtTaskClaimVo toClaimVo(PtTaskClaim claim) {
@@ -355,6 +407,7 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
             vo.setRealName(profile.getRealName());
             vo.setPhone(profile.getPhone());
         }
+        fillClaimRound(vo, claim);
         fillAssignment(vo, claim.getClaimId());
         return vo;
     }
@@ -387,6 +440,18 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         vo.setImageId(assignment.getImageId());
         vo.setAssignedImageUrl(assignment.getAssignedImageUrl());
         vo.setAssignedImageName(assignment.getAssignedImageName());
+    }
+
+    private void fillClaimRound(PtTaskClaimVo vo, PtTaskClaim claim) {
+        if (claim.getClaimId() == null || claim.getTaskId() == null || claim.getUserId() == null) {
+            return;
+        }
+        LambdaQueryWrapper<PtTaskClaim> lqw = Wrappers.lambdaQuery();
+        lqw.eq(PtTaskClaim::getTaskId, claim.getTaskId());
+        lqw.eq(PtTaskClaim::getUserId, claim.getUserId());
+        lqw.ne(PtTaskClaim::getClaimStatus, CLAIM_CANCELLED);
+        lqw.le(PtTaskClaim::getClaimId, claim.getClaimId());
+        vo.setClaimRound(Math.toIntExact(ptTaskClaimMapper.selectCount(lqw)));
     }
 
     private void fillAssignment(PtTaskSubmissionVo vo, Long claimId) {

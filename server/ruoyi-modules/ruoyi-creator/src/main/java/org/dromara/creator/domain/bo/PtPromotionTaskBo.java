@@ -28,8 +28,13 @@ public class PtPromotionTaskBo {
     private BigDecimal unitPrice;
 
     @NotNull(message = "任务名额不能为空")
-    @Min(value = 1, message = "任务名额至少为1")
+    @Min(value = 0, message = "任务名额不能小于0")
     private Integer totalQuota;
+
+    private String claimLimitType;
+
+    @Min(value = 0, message = "每人领取次数不能小于0")
+    private Integer claimLimitCount;
 
     private Date startTime;
 

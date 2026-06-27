@@ -2,6 +2,7 @@ import { type PageResult, request } from "@/utils/request";
 
 export type TaskStatus = "draft" | "published" | "paused" | "finished";
 export type ClaimStatus = "claimed" | "submitted" | "approved" | "rejected";
+export type TaskClaimGroup = "pending" | "completed";
 export type SubmissionStatus = "pending" | "approved" | "rejected";
 
 export interface PromotionTask {
@@ -12,6 +13,8 @@ export interface PromotionTask {
   taskRequirement?: string;
   unitPrice?: number | string;
   totalQuota?: number;
+  claimLimitType?: "once" | "limited" | "unlimited" | string;
+  claimLimitCount?: number;
   claimedCount?: number;
   submittedCount?: number;
   approvedCount?: number;
@@ -35,6 +38,7 @@ export interface TaskClaim {
   platform?: string;
   realName?: string;
   phone?: string;
+  claimRound?: number;
   assignIndex?: number;
   textId?: number | string;
   assignedText?: string;
@@ -86,7 +90,7 @@ export const claimTask = (taskId: number | string) =>
     method: "POST",
   });
 
-export const listMyTasks = (params: { pageNum: number; pageSize: number }) =>
+export const listMyTasks = (params: { pageNum: number; pageSize: number; group?: TaskClaimGroup }) =>
   request<PageResult<TaskClaim>>({
     url: "/miniapp/task/my",
     method: "GET",

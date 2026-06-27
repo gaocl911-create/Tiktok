@@ -20,3 +20,9 @@ export interface OssQuery extends PageQuery {
 export interface OssForm {
   file: undefined | string;
 }
+
+export interface OssUploadVO {
+  url: string;
+  fileName: string;
+  ossId: string;
+}

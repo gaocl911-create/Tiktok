@@ -44,8 +44,9 @@ public class MiniappTaskController {
     }
 
     @GetMapping("/my")
-    public TableDataInfo<PtTaskClaimVo> myTasks(PageQuery pageQuery) {
-        return taskParticipationService.queryMyClaimPage(pageQuery);
+    public TableDataInfo<PtTaskClaimVo> myTasks(PageQuery pageQuery,
+                                                @RequestParam(required = false) String group) {
+        return taskParticipationService.queryMyClaimPage(pageQuery, group);
     }
 
     @PostMapping("/claim/{claimId}/submit-content")

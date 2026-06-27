@@ -9,6 +9,7 @@
           </div>
           <div class="header-actions">
             <el-button :icon="Refresh" :loading="loading" @click="getList">刷新</el-button>
+            <el-button v-hasPermi="['parttime:material:image:add']" :icon="Upload" @click="handleBatchUpload">批量上传</el-button>
             <el-button v-hasPermi="['parttime:material:image:add']" type="primary" :icon="Plus" @click="handleAdd">新增图片</el-button>
           </div>
         </div>
@@ -92,7 +93,7 @@
           <el-image class="preview" :src="form.imageUrl" :preview-src-list="[form.imageUrl]" preview-teleported fit="cover" />
         </el-form-item>
         <el-form-item label="图片名称">
-          <el-input v-model="form.imageName" placeholder="例如：冠心病推广图-01" maxlength="255" show-word-limit />
+          <el-input v-model="form.imageName" placeholder="例如：冠心病推广图 01" maxlength="255" show-word-limit />
         </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-radio-group v-model="form.status">
@@ -113,27 +114,69 @@
         <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="batchDialogVisible" title="批量上传图片" width="640px" append-to-body>
+      <el-form ref="batchFormRef" :model="batchForm" :rules="batchRules" label-width="86px">
+        <el-form-item label="图片分类" prop="categoryId">
+          <el-select v-model="batchForm.categoryId" placeholder="请选择导入到哪个图片分类" filterable style="width: 100%">
+            <el-option v-for="item in categoryOptions" :key="item.categoryId" :label="item.categoryName" :value="item.categoryId" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="上传图片">
+          <el-upload v-model:file-list="batchFileList" drag multiple :auto-upload="false" accept=".png,.jpg,.jpeg,.webp">
+            <el-icon class="el-icon--upload">
+              <UploadFilled />
+            </el-icon>
+            <div class="el-upload__text">将图片拖到此处，或 <em>点击选择多张图片</em></div>
+            <template #tip>
+              <div class="el-upload__tip">支持 png、jpg、jpeg、webp，单张不超过 10MB。入库顺序按本次选择顺序排列。</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="起始排序">
+          <el-input-number v-model="batchForm.sortStart" :min="0" :precision="0" />
+          <span class="form-tip">第 1 张图片使用该排序，后续依次 +1</span>
+        </el-form-item>
+        <el-form-item label="状态" prop="status">
+          <el-radio-group v-model="batchForm.status">
+            <el-radio label="0">启用</el-radio>
+            <el-radio label="1">停用</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="batchForm.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="batchUploading" @click="submitBatchUpload">开始上传</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ParttimeMaterialImage" lang="ts">
-import { Plus, Refresh, Search } from '@element-plus/icons-vue';
+import { Plus, Refresh, Search, Upload, UploadFilled } from '@element-plus/icons-vue';
 import { listMaterialCategoryOptions } from '@/api/parttime/material/category';
 import { addMaterialImage, deleteMaterialImage, listMaterialImages, updateMaterialImage } from '@/api/parttime/material/image';
-import { listByIds } from '@/api/system/oss';
+import { listByIds, uploadOss } from '@/api/system/oss';
 import type { PtMaterialCategory, PtMaterialImage, PtMaterialImageForm, PtMaterialImageQuery } from '@/api/parttime/material/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 
 const loading = ref(false);
 const submitting = ref(false);
+const batchUploading = ref(false);
 const dialogVisible = ref(false);
+const batchDialogVisible = ref(false);
 const imageList = ref<PtMaterialImage[]>([]);
 const categoryOptions = ref<PtMaterialCategory[]>([]);
 const total = ref(0);
 const imageOssId = ref('');
 const queryFormRef = ref<ElFormInstance>();
 const imageFormRef = ref<ElFormInstance>();
+const batchFormRef = ref<ElFormInstance>();
+const batchFileList = ref<UploadUserFile[]>([]);
 
 const queryParams = reactive<PtMaterialImageQuery>({
   pageNum: 1,
@@ -153,11 +196,23 @@ const defaultForm = (): PtMaterialImageForm => ({
   remark: ''
 });
 
+const defaultBatchForm = () => ({
+  categoryId: undefined as string | number | undefined,
+  sortStart: 0,
+  status: '0' as '0' | '1',
+  remark: ''
+});
+
 const form = reactive<PtMaterialImageForm>(defaultForm());
+const batchForm = reactive(defaultBatchForm());
 
 const rules: ElFormRules = {
   categoryId: [{ required: true, message: '请选择图片分类', trigger: 'change' }],
   imageUrl: [{ required: true, message: '请上传或填写图片地址', trigger: 'blur' }]
+};
+
+const batchRules: ElFormRules = {
+  categoryId: [{ required: true, message: '请选择图片分类', trigger: 'change' }]
 };
 
 watch(imageOssId, async (ossId) => {
@@ -250,6 +305,75 @@ const handleDelete = async (row: PtMaterialImage) => {
   await getList();
 };
 
+const handleBatchUpload = () => {
+  Object.assign(batchForm, defaultBatchForm());
+  batchForm.categoryId = queryParams.categoryId || undefined;
+  batchFileList.value = [];
+  batchFormRef.value?.clearValidate();
+  batchDialogVisible.value = true;
+};
+
+const isValidImageFile = (file: File) => {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const isAllowedType = file.type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp'].includes(ext || '');
+  const isAllowedSize = file.size / 1024 / 1024 <= 10;
+  return isAllowedType && isAllowedSize;
+};
+
+const removeExt = (fileName?: string) => {
+  if (!fileName) return '';
+  return fileName.replace(/\.[^/.]+$/, '');
+};
+
+const submitBatchUpload = async () => {
+  await batchFormRef.value?.validate();
+  if (!batchFileList.value.length) {
+    proxy?.$modal.msgError('请先选择要上传的图片');
+    return;
+  }
+
+  batchUploading.value = true;
+  let successCount = 0;
+  let failCount = 0;
+
+  try {
+    for (let index = 0; index < batchFileList.value.length; index++) {
+      const file = batchFileList.value[index].raw;
+      if (!file || !isValidImageFile(file)) {
+        failCount++;
+        continue;
+      }
+
+      try {
+        const uploadRes = await uploadOss(file);
+        const uploaded = uploadRes.data;
+        await addMaterialImage({
+          categoryId: batchForm.categoryId,
+          imageUrl: uploaded.url,
+          imageName: removeExt(uploaded.fileName || file.name),
+          imageSize: file.size,
+          sort: (batchForm.sortStart || 0) + index,
+          status: batchForm.status,
+          remark: batchForm.remark
+        });
+        successCount++;
+      } catch (e) {
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      batchDialogVisible.value = false;
+      batchFileList.value = [];
+      await getList();
+    }
+    const failText = failCount > 0 ? `，失败 ${failCount} 张` : '';
+    proxy?.$modal.msgSuccess(`成功添加 ${successCount} 张图片${failText}`);
+  } finally {
+    batchUploading.value = false;
+  }
+};
+
 onMounted(async () => {
   await loadOptions();
   await getList();
@@ -299,7 +423,11 @@ onMounted(async () => {
 }
 
 .form-tip {
-  display: block;
-  margin-top: 8px;
+  display: inline-flex;
+  margin-left: 10px;
+}
+
+:deep(.el-upload-dragger) {
+  padding: 26px 16px;
 }
 </style>

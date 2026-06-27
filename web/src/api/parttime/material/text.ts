@@ -22,6 +22,13 @@ export const addMaterialText = (data: PtMaterialTextForm): AxiosPromise<PtMateri
     data
   });
 
+export const importMaterialTexts = (data: FormData) =>
+  request({
+    url: '/parttime/material/text/importData',
+    method: 'post',
+    data
+  });
+
 export const updateMaterialText = (data: PtMaterialTextForm): AxiosPromise<PtMaterialText> =>
   request({
     url: '/parttime/material/text',
