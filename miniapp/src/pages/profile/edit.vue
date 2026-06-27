@@ -88,6 +88,13 @@
       </wd-button>
     </view>
 
+    <view class="legal-tip">
+      <text>提交资料前请确认已阅读</text>
+      <text class="legal-link" @click="openAgreement">《用户协议》</text>
+      <text>和</text>
+      <text class="legal-link" @click="openPrivacy">《隐私政策》</text>
+    </view>
+
     <text v-if="!canEdit" class="lock-tip">
       当前状态暂不可修改资料；如需变更，请联系后台管理员。
     </text>
@@ -211,6 +218,14 @@ const handleSubmit = async () => {
   }
 };
 
+const openAgreement = () => {
+  uni.navigateTo({ url: "/pages/legal/agreement" });
+};
+
+const openPrivacy = () => {
+  uni.navigateTo({ url: "/pages/legal/privacy" });
+};
+
 onShow(loadProfile);
 </script>
 
@@ -302,5 +317,19 @@ onShow(loadProfile);
   font-size: 24rpx;
   line-height: 1.6;
   text-align: center;
+}
+
+.legal-tip {
+  display: block;
+  margin-top: 24rpx;
+  color: var(--cm-muted);
+  font-size: 24rpx;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.legal-link {
+  color: var(--cm-ink);
+  font-weight: 900;
 }
 </style>

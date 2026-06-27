@@ -43,6 +43,24 @@
       "style": {
         "navigationBarTitleText": "兼职资料"
       }
+    },
+    {
+      "path": "pages/profile/guide",
+      "style": {
+        "navigationBarTitleText": "使用操作说明"
+      }
+    },
+    {
+      "path": "pages/legal/agreement",
+      "style": {
+        "navigationBarTitleText": "用户协议"
+      }
+    },
+    {
+      "path": "pages/legal/privacy",
+      "style": {
+        "navigationBarTitleText": "隐私政策"
+      }
     }
   ],
   "tabBar": {
