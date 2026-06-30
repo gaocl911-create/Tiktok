@@ -155,19 +155,20 @@ const handleLogin = () => {
   loginRef.value?.validate(async (valid: boolean, fields: any) => {
     if (valid) {
       loading.value = true;
-      // 勾选了需要记住密码设置在 localStorage 中设置记住用户名和密码
+      // 勾选了"记住我"：只持久化租户和用户名，密码绝不落 localStorage。
+      // 历史实现把明文密码塞进 localStorage，等同于浏览器一被劫持就丢账号。
       if (loginForm.value.rememberMe) {
         localStorage.setItem('tenantId', String(loginForm.value.tenantId));
         localStorage.setItem('username', String(loginForm.value.username));
-        localStorage.setItem('password', String(loginForm.value.password));
         localStorage.setItem('rememberMe', String(loginForm.value.rememberMe));
       } else {
         // 否则移除
         localStorage.removeItem('tenantId');
         localStorage.removeItem('username');
-        localStorage.removeItem('password');
         localStorage.removeItem('rememberMe');
       }
+      // 历史遗留的明文密码记录，强制清除一次。
+      localStorage.removeItem('password');
       // 调用action的登录方法
       const [err] = await to(userStore.login(loginForm.value));
       if (!err) {
@@ -182,7 +183,8 @@ const handleLogin = () => {
         }
       }
     } else {
-      console.log('error submit!', fields);
+      // 不打印整个 fields（含明文密码），只标记校验失败。
+      if (import.meta.env.DEV) console.warn('[login] validation failed');
     }
   });
 };
@@ -205,12 +207,11 @@ const getCode = async () => {
 const getLoginData = () => {
   const tenantId = localStorage.getItem('tenantId');
   const username = localStorage.getItem('username');
-  const password = localStorage.getItem('password');
   const rememberMe = localStorage.getItem('rememberMe');
   loginForm.value = {
     tenantId: tenantId === null ? String(loginForm.value.tenantId) : tenantId,
     username: username === null ? String(loginForm.value.username) : username,
-    password: password === null ? String(loginForm.value.password) : String(password),
+    password: '',
     rememberMe: rememberMe === null ? false : Boolean(rememberMe)
   } as LoginData;
 };

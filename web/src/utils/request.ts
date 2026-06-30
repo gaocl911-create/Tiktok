@@ -9,7 +9,7 @@ import { LoadingInstance } from 'element-plus/es/components/loading/src/loading'
 import FileSaver from 'file-saver';
 import { getLanguage } from '@/lang';
 import { encryptBase64, encryptWithAes, generateAesKey, decryptWithAes, decryptBase64 } from '@/utils/crypto';
-import { encrypt, decrypt } from '@/utils/jsencrypt';
+import { encrypt } from '@/utils/jsencrypt';
 import router from '@/router';
 
 const encryptHeader = 'encrypt-key';
@@ -105,19 +105,12 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   (res: AxiosResponse) => {
     if (import.meta.env.VITE_APP_ENCRYPT === 'true') {
-      // 加密后的 AES 秘钥
+      // 响应解密路径已停用：前端不再持有 RSA 私钥（私钥放前端等同明文），
+      // 后端需相应关闭响应加密；若仍下发了密文 header，这里只跳过解密、
+      // 让上层按错误处理，而不是给攻击者一个解密 oracle。
       const keyStr = res.headers[encryptHeader];
-      // 加密
       if (keyStr != null && keyStr != '') {
-        const data = res.data;
-        // 请求体 AES 解密
-        const base64Str = decrypt(keyStr);
-        // base64 解码 得到请求头的 AES 秘钥
-        const aesKey = decryptBase64(base64Str.toString());
-        // aesKey 解码 data
-        const decryptData = decryptWithAes(data, aesKey);
-        // 将结果 (得到的是 JSON 字符串) 转为 JSON
-        res.data = JSON.parse(decryptData);
+        console.warn('[request] 收到响应加密标识，但前端响应解密已停用，请改由后端下发明文。');
       }
     }
     // 未设置状态码则默认成功状态

@@ -44,7 +44,8 @@
         </view>
       </view>
       <wd-button block :loading="loggingIn === 'wechat'" @click="handleWechatLogin">微信登录</wd-button>
-      <wd-button block plain :loading="loggingIn === 'mock'" @click="handleMockLogin">开发模拟登录</wd-button>
+      <!-- 模拟登录仅 dev 构建可见；后端 prod profile 也会硬拒绝 mock 路径。 -->
+      <wd-button v-if="showMockLogin" block plain :loading="loggingIn === 'mock'" @click="handleMockLogin">开发模拟登录</wd-button>
       <text class="tips">首次登录后会弹出使用操作说明，帮助你快速熟悉流程。</text>
     </view>
 
@@ -126,6 +127,8 @@ const GUIDE_DISMISSED_KEY = "creator-miniapp-guide-dismissed";
 const authStore = useAuthStore();
 const { isLoggedIn, openid } = storeToRefs(authStore);
 const loggingIn = ref<"" | "wechat" | "mock">("");
+// 仅 dev 构建展示模拟登录入口；prod 包里这个常量被静态替换为 false，按钮整段被摇树掉。
+const showMockLogin = import.meta.env.DEV;
 const profile = ref<StaffProfile>({});
 const agreementChecked = ref(Boolean(uni.getStorageSync(AGREEMENT_ACCEPTED_KEY)));
 const guidePopupVisible = ref(false);
@@ -163,8 +166,6 @@ const menuItems: MenuItem[] = [
   { label: "完善兼职资料", desc: "手机号、微信号、抖音号", action: "profile" },
   { label: "任务广场", desc: "查看可领取任务", action: "tasks" },
   { label: "我的作品", desc: "提交链接与审核进度", action: "works" },
-  { label: "佣金明细", desc: "后续接入结算数据", action: "todo" },
-  { label: "结算记录", desc: "后续接入提现记录", action: "todo" },
   { label: "用户协议", desc: "平台服务与任务规则", action: "agreement" },
   { label: "隐私政策", desc: "个人信息收集与使用说明", action: "privacy" },
 ];

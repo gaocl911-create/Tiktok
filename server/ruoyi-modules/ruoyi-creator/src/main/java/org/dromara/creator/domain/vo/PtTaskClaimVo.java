@@ -36,4 +36,13 @@ public class PtTaskClaimVo implements Serializable {
     private Long imageId;
     private String assignedImageUrl;
     private String assignedImageName;
+
+    private Long submissionId;
+    private String contentUrl;
+    private String contentDesc;
+    private String screenshotUrl;
+    private String submissionStatus;
+    private Date auditTime;
+    private String rejectReason;
+    private Long monitorContentId;
 }

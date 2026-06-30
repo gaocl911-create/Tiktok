@@ -100,8 +100,9 @@ sa-token:
   is-concurrent: true
   # 在多人登录同一账号时，是否共用一个token (为true时所有登录共用一个token, 为false时每次登录新建一个token)
   is-share: false
-  # jwt秘钥
-  jwt-secret-key: abcdefghijklmnopqrstuvwxyz
+  # jwt秘钥 — 必须通过环境变量 SA_TOKEN_JWT_SECRET 注入；空值在 prod 启动时由
+  # application-prod.yml 的覆盖校验拦截，避免使用弱默认密钥签发线上 token。
+  jwt-secret-key: ${SA_TOKEN_JWT_SECRET:abcdefghijklmnopqrstuvwxyz}
 
 # security配置
 security:
@@ -170,20 +171,18 @@ mybatis-encryptor:
 # api接口加密
 api-decrypt:
   # 是否开启全局接口加密
-  enabled: true
+  enabled: ${API_DECRYPT_ENABLED:true}
   # AES 加密头标识
   headerFlag: encrypt-key
-  # 响应加密公钥 非对称算法的公私钥 如：SM2，RSA 使用者请自行更换
-  # 对应前端解密私钥 MIIBVAIBADANBgkqhkiG9w0BAQEFAASCAT4wggE6AgEAAkEAmc3CuPiGL/LcIIm7zryCEIbl1SPzBkr75E2VMtxegyZ1lYRD+7TZGAPkvIsBcaMs6Nsy0L78n2qh+lIZMpLH8wIDAQABAkEAk82Mhz0tlv6IVCyIcw/s3f0E+WLmtPFyR9/WtV3Y5aaejUkU60JpX4m5xNR2VaqOLTZAYjW8Wy0aXr3zYIhhQQIhAMfqR9oFdYw1J9SsNc+CrhugAvKTi0+BF6VoL6psWhvbAiEAxPPNTmrkmrXwdm/pQQu3UOQmc2vCZ5tiKpW10CgJi8kCIFGkL6utxw93Ncj4exE/gPLvKcT+1Emnoox+O9kRXss5AiAMtYLJDaLEzPrAWcZeeSgSIzbL+ecokmFKSDDcRske6QIgSMkHedwND1olF8vlKsJUGK3BcdtM8w4Xq7BpSBwsloE=
-  publicKey: MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJnNwrj4hi/y3CCJu868ghCG5dUj8wZK++RNlTLcXoMmdZWEQ/u02RgD5LyLAXGjLOjbMtC+/J9qofpSGTKSx/MCAwEAAQ==
-  # 请求解密私钥 非对称算法的公私钥 如：SM2，RSA 使用者请自行更换
-  # 对应前端加密公钥 MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAKoR8mX0rGKLqzcWmOzbfj64K8ZIgOdHnzkXSOVOZbFu/TJhZ7rFAN+eaGkl3C4buccQd/EjEsj9ir7ijT7h96MCAwEAAQ==
-  privateKey: MIIBVAIBADANBgkqhkiG9w0BAQEFAASCAT4wggE6AgEAAkEAqhHyZfSsYourNxaY7Nt+PrgrxkiA50efORdI5U5lsW79MmFnusUA355oaSXcLhu5xxB38SMSyP2KvuKNPuH3owIDAQABAkAfoiLyL+Z4lf4Myxk6xUDgLaWGximj20CUf+5BKKnlrK+Ed8gAkM0HqoTt2UZwA5E2MzS4EI2gjfQhz5X28uqxAiEA3wNFxfrCZlSZHb0gn2zDpWowcSxQAgiCstxGUoOqlW8CIQDDOerGKH5OmCJ4Z21v+F25WaHYPxCFMvwxpcw99EcvDQIgIdhDTIqD2jfYjPTY8Jj3EDGPbH2HHuffvflECt3Ek60CIQCFRlCkHpi7hthhYhovyloRYsM+IS9h/0BzlEAuO0ktMQIgSPT3aFAgJYwKpqRYKlLDVcflZFCKY7u3UP8iWi1Qw0Y=
+  # 响应加密公钥 / 请求解密私钥：均必须通过环境变量注入（部署前生成新 keypair）。
+  # 历史默认值已在生产环境视为泄露 —— 留作 dev/test 兼容，prod profile 不允许回退。
+  publicKey: ${API_DECRYPT_RESPONSE_PUBLIC_KEY:MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJnNwrj4hi/y3CCJu868ghCG5dUj8wZK++RNlTLcXoMmdZWEQ/u02RgD5LyLAXGjLOjbMtC+/J9qofpSGTKSx/MCAwEAAQ==}
+  privateKey: ${API_DECRYPT_REQUEST_PRIVATE_KEY:MIIBVAIBADANBgkqhkiG9w0BAQEFAASCAT4wggE6AgEAAkEAqhHyZfSsYourNxaY7Nt+PrgrxkiA50efORdI5U5lsW79MmFnusUA355oaSXcLhu5xxB38SMSyP2KvuKNPuH3owIDAQABAkAfoiLyL+Z4lf4Myxk6xUDgLaWGximj20CUf+5BKKnlrK+Ed8gAkM0HqoTt2UZwA5E2MzS4EI2gjfQhz5X28uqxAiEA3wNFxfrCZlSZHb0gn2zDpWowcSxQAgiCstxGUoOqlW8CIQDDOerGKH5OmCJ4Z21v+F25WaHYPxCFMvwxpcw99EcvDQIgIdhDTIqD2jfYjPTY8Jj3EDGPbH2HHuffvflECt3Ek60CIQCFRlCkHpi7hthhYhovyloRYsM+IS9h/0BzlEAuO0ktMQIgSPT3aFAgJYwKpqRYKlLDVcflZFCKY7u3UP8iWi1Qw0Y=}
 
 springdoc:
   api-docs:
-    # 是否开启接口文档
-    enabled: true
+    # 是否开启接口文档 — 生产关掉（被 application-prod.yml 强制覆盖为 false）。
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
   info:
     # 标题
     title: '标题：RuoYi-Vue-Plus多租户管理系统_接口文档'
@@ -224,15 +223,15 @@ lock4j:
   # 分布式锁的超时时间，默认为 30 秒
   expire: 30000
 
---- # Actuator 监控端点的配置项
+--- # Actuator 监控端点 — 默认全开仅用于 dev/local；prod 由 application-prod.yml 覆盖为 health,info。
 management:
   endpoints:
     web:
       exposure:
-        include: '*'
+        include: ${MANAGEMENT_ENDPOINTS_INCLUDE:*}
   endpoint:
     health:
-      show-details: ALWAYS
+      show-details: ${MANAGEMENT_HEALTH_DETAILS:ALWAYS}
     logfile:
       external-file: ./logs/sys-console.log
 

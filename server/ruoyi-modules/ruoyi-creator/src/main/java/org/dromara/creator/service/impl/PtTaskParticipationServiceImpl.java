@@ -409,6 +409,7 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         }
         fillClaimRound(vo, claim);
         fillAssignment(vo, claim.getClaimId());
+        fillLatestSubmission(vo, claim.getClaimId());
         return vo;
     }
 
@@ -440,6 +441,26 @@ public class PtTaskParticipationServiceImpl implements IPtTaskParticipationServi
         vo.setImageId(assignment.getImageId());
         vo.setAssignedImageUrl(assignment.getAssignedImageUrl());
         vo.setAssignedImageName(assignment.getAssignedImageName());
+    }
+
+    private void fillLatestSubmission(PtTaskClaimVo vo, Long claimId) {
+        LambdaQueryWrapper<PtTaskSubmission> lqw = Wrappers.lambdaQuery();
+        lqw.eq(PtTaskSubmission::getClaimId, claimId);
+        lqw.orderByDesc(PtTaskSubmission::getSubmitTime);
+        lqw.orderByDesc(PtTaskSubmission::getSubmissionId);
+        lqw.last("limit 1");
+        PtTaskSubmission submission = ptTaskSubmissionMapper.selectOne(lqw);
+        if (submission == null) {
+            return;
+        }
+        vo.setSubmissionId(submission.getSubmissionId());
+        vo.setContentUrl(submission.getContentUrl());
+        vo.setContentDesc(submission.getContentDesc());
+        vo.setScreenshotUrl(submission.getScreenshotUrl());
+        vo.setSubmissionStatus(submission.getSubmissionStatus());
+        vo.setAuditTime(submission.getAuditTime());
+        vo.setRejectReason(submission.getRejectReason());
+        vo.setMonitorContentId(submission.getMonitorContentId());
     }
 
     private void fillClaimRound(PtTaskClaimVo vo, PtTaskClaim claim) {

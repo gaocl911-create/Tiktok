@@ -3,19 +3,14 @@ import JSEncrypt from 'jsencrypt';
 
 const publicKey = import.meta.env.VITE_APP_RSA_PUBLIC_KEY;
 
-// 前端不建议存放私钥 不建议解密数据 因为都是透明的意义不大
-const privateKey = import.meta.env.VITE_APP_RSA_PRIVATE_KEY;
-
-// 加密
+// 加密 — 请求体加密用公钥，公钥放前端是预期的。
 export const encrypt = (txt: string) => {
   const encryptor = new JSEncrypt();
   encryptor.setPublicKey(publicKey); // 设置公钥
   return encryptor.encrypt(txt); // 对数据进行加密
 };
 
-// 解密
-export const decrypt = (txt: string) => {
-  const encryptor = new JSEncrypt();
-  encryptor.setPrivateKey(privateKey); // 设置私钥
-  return encryptor.decrypt(txt); // 对数据进行解密
-};
+// 解密接口已彻底移除：前端任何 dist 都会被反编译出 import.meta.env.*，
+// RSA 私钥放在前端等同于把私钥公开。响应解密统一移到后端 / BFF 完成，
+// 前端如需读取密文响应，请改由后端先解密再下发明文。
+

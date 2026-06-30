@@ -33,6 +33,7 @@ import org.dromara.system.service.ISysSocialService;
 import org.dromara.system.service.ISysUserService;
 import org.dromara.web.domain.vo.LoginVo;
 import org.dromara.web.service.IAuthStrategy;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,11 +47,17 @@ public class XcxAuthStrategy implements IAuthStrategy {
     private static final String SOCIAL_SOURCE = "WECHAT_MINI_PROGRAM";
     private static final Long PT_STAFF_ROLE_ID = 5L;
     private static final Long DEFAULT_DEPT_ID = 103L;
+    private static final String PROD_PROFILE = "prod";
 
     private final ISysUserService userService;
     private final ISysSocialService socialService;
     private final IPtStaffProfileService staffProfileService;
     private final WeChatMiniappProperties weChatMiniappProperties;
+
+    // 当前激活的 Spring profile。prod 下绝不允许 mock:* 登录，
+    // 即便 mock-enabled 配置被误开成 true，也要硬拦下来。
+    @Value("${spring.profiles.active:}")
+    private String activeProfile;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -94,7 +101,15 @@ public class XcxAuthStrategy implements IAuthStrategy {
     }
 
     private WechatIdentity resolveWechatIdentity(String actualAppid, String xcxCode) {
-        if (Boolean.TRUE.equals(weChatMiniappProperties.getMockEnabled()) && xcxCode.startsWith("mock:")) {
+        if (xcxCode.startsWith("mock:")) {
+            // 生产 profile 下硬拒绝 mock 登录路径，不依赖配置开关。
+            // 配置开关只决定 dev/test 是否允许 mock，profile=prod 时直接拦截。
+            if (PROD_PROFILE.equalsIgnoreCase(activeProfile)) {
+                throw new ServiceException("当前环境不允许使用模拟登录");
+            }
+            if (!Boolean.TRUE.equals(weChatMiniappProperties.getMockEnabled())) {
+                throw new ServiceException("未开启模拟登录");
+            }
             String openid = StringUtils.blankToDefault(xcxCode.substring("mock:".length()), "dev_openid");
             AuthToken token = new AuthToken();
             token.setOpenId(openid);
@@ -136,7 +151,9 @@ public class XcxAuthStrategy implements IAuthStrategy {
             return user;
         }
 
-        log.info("New miniapp user openid={}, creating account.", openid);
+        // openid 视为 PII，不放 INFO；DEBUG 才打全量，INFO 只打脱敏前缀。
+        log.info("New miniapp user openid={}***, creating account.", maskOpenid(openid));
+        log.debug("New miniapp user full openid={}", openid);
         SysUserBo userBo = new SysUserBo();
         userBo.setNickName("微信用户");
         userBo.setUserName("wx_" + openid.substring(0, Math.min(openid.length(), 16)));
@@ -177,8 +194,19 @@ public class XcxAuthStrategy implements IAuthStrategy {
         profileBo.setOnboardingStatus("incomplete");
         staffProfileService.createEmptyProfile(profileBo);
 
-        log.info("Miniapp user account created. userId={}, openid={}", newUser.getUserId(), openid);
+        log.info("Miniapp user account created. userId={}, openid={}***", newUser.getUserId(), maskOpenid(openid));
+        log.debug("Miniapp user account created. userId={}, full openid={}", newUser.getUserId(), openid);
         return newUser;
+    }
+
+    /**
+     * openid 仅展示前 6 字符，剩余以 *** 占位。日志中所有引用 openid 的位置都应走这里。
+     */
+    private static String maskOpenid(String openid) {
+        if (StringUtils.isBlank(openid)) {
+            return "";
+        }
+        return openid.length() <= 6 ? openid : openid.substring(0, 6);
     }
 
     private record WechatIdentity(String openid, String unionId, AuthToken token) {

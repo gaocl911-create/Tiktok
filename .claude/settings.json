@@ -3,7 +3,10 @@
     "allow": [
       "Bash(node scripts/test-features.mjs)",
       "Bash(ADMIN_TOKEN=fake-token node scripts/test-features.mjs)",
-      "Bash(node scripts/gen-text-templates.mjs)"
+      "Bash(node scripts/gen-text-templates.mjs)",
+      "WebSearch",
+      "Bash(ls -la \"/c/Users/admin/.claude/projects/d--workspace-TikTok-Platform/memory/\" 2>/dev/null || echo \"DIR NOT FOUND\")",
+      "Read(//c/Users/admin/.claude/projects/d--workspace-TikTok-Platform/memory//**)"
     ]
   }
 }

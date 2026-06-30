@@ -6,6 +6,15 @@ deploy/.env.prod
 application-local.yml
 application-local.yaml
 server/ruoyi-admin/src/main/resources/application-dev.yml
+# 前端 env：曾把 RSA 私钥写进 web/.env.* 并提交过，迁出仓库以后任何带密钥的 env 都禁止入库。
+web/.env
+web/.env.development
+web/.env.production
+!web/.env.*.example
+# 小程序：生产 env + WeChat 开发者工具个人配置不入库。
+miniapp/.env.production
+!miniapp/.env.production.example
+miniapp/project.private.config.json
 
 # Java
 target/

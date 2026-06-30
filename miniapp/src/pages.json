@@ -33,6 +33,12 @@
       }
     },
     {
+      "path": "pages/works/detail",
+      "style": {
+        "navigationBarTitleText": "作品详情"
+      }
+    },
+    {
       "path": "pages/profile/index",
       "style": {
         "navigationBarTitleText": "个人中心"

@@ -1,6 +1,26 @@
 --- # 临时文件存储位置 避免临时文件被系统清理报错
 spring.servlet.multipart.location: /ruoyi/server/temp
 
+--- # 生产环境硬覆盖：关闭 swagger / 收紧 actuator / 强制非弱密钥
+springdoc.api-docs.enabled: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+sa-token:
+  # 必须显式注入 SA_TOKEN_JWT_SECRET（建议 64+ 字符随机串），缺失时 fail-fast。
+  jwt-secret-key: ${SA_TOKEN_JWT_SECRET:?SA_TOKEN_JWT_SECRET must be set in prod}
+
+api-decrypt:
+  # 加解密 keypair 必须由部署侧生成并注入；不允许回退到代码中的历史值。
+  publicKey: ${API_DECRYPT_RESPONSE_PUBLIC_KEY:?API_DECRYPT_RESPONSE_PUBLIC_KEY must be set in prod}
+  privateKey: ${API_DECRYPT_REQUEST_PRIVATE_KEY:?API_DECRYPT_REQUEST_PRIVATE_KEY must be set in prod}
+
 --- # 监控中心配置
 spring.boot.admin.client:
   # 增加客户端开关
@@ -28,13 +48,22 @@ creator:
     estimated-unit-price-usd: ${TIKHUB_ESTIMATED_UNIT_PRICE_USD:0.001}
     usd-to-cny-rate: ${TIKHUB_USD_TO_CNY_RATE:7.2}
 
+miniapp:
+  wechat:
+    appid: ${WECHAT_MINIAPP_APPID:?WECHAT_MINIAPP_APPID must be set in prod}
+    app-secret: ${WECHAT_MINIAPP_APP_SECRET:?WECHAT_MINIAPP_APP_SECRET must be set in prod}
+    api-base-url: ${WECHAT_MINIAPP_API_BASE_URL:https://api.weixin.qq.com}
+    # prod 永远关闭模拟登录；即使 env 误传 true 也会被 XcxAuthStrategy 的 profile guard 拦下。
+    mock-enabled: false
+
 --- # snail-job 配置
 snail-job:
   enabled: true
   # 需要在 SnailJob 后台组管理创建对应名称的组,然后创建任务的时候选择对应的组,才能正确分派任务
   group: "ruoyi_group"
-  # SnailJob 接入验证令牌 详见 script/sql/ry_job.sql `sj_group_config`表
-  token: "SJ_cKqBTPzCsWA3VyuCfFoccmuIEGXjr5KT"
+  # SnailJob 接入验证令牌：必须通过环境变量注入；缺失时 fail-fast。
+  # 历史默认值 SJ_cKqBTPzCsWA3VyuCfFoccmuIEGXjr5KT 已视为泄露，部署前必须轮换并同步更新 sj_group_config 表。
+  token: ${SNAIL_JOB_TOKEN:?SNAIL_JOB_TOKEN must be set in prod}
   server:
     host: ${SNAIL_JOB_SERVER_HOST:${SNAIL_JOB_HOST:127.0.0.1}}
     port: ${SNAIL_JOB_SERVER_PORT:${SNAIL_JOB_PORT:17888}}
@@ -65,8 +94,8 @@ spring:
           # jdbc 所有参数配置参考 https://lionli.blog.csdn.net/article/details/122018562
           # rewriteBatchedStatements=true 批处理优化 大幅提升批量插入更新删除性能(对数据库有性能损耗 使用批量操作应考虑性能问题)
           url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:ry-vue}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=${MYSQL_USE_SSL:false}&serverTimezone=Asia/Shanghai&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
-          username: ${MYSQL_USERNAME:root}
-          password: ${MYSQL_PASSWORD:root}
+          username: ${MYSQL_USERNAME:?MYSQL_USERNAME must be set in prod}
+          password: ${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set in prod}
 #        # 从库数据源
 #        slave:
 #          lazy: true
@@ -118,8 +147,8 @@ spring.data:
     port: ${REDIS_PORT:6379}
     # 数据库索引
     database: ${REDIS_DATABASE:0}
-    # redis 密码必须配置
-    password: ${REDIS_PASSWORD:ruoyi123}
+    # redis 密码必须配置 — prod 强制非空。
+    password: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in prod}
     # 连接超时时间
     timeout: 10s
     # 是否开启ssl

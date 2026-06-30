@@ -5,10 +5,12 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ry-vue}
-    ports:
-      - "${MYSQL_PUBLISHED_PORT:-13307}:3306"
+    # 仅在 docker 内网暴露 3306，不对宿主机/公网开放。
+    # 如需临时本机连接，改用 docker exec 或新增 ports 仅 bind 127.0.0.1。
+    expose:
+      - "3306"
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_general_ci
@@ -37,9 +39,9 @@ services:
     container_name: ${CONTAINER_PREFIX:-tiktok-platform}-redis
     restart: unless-stopped
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-ruoyi123}
-    ports:
-      - "${REDIS_PUBLISHED_PORT:-16380}:6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    expose:
+      - "6379"
     command: ["sh", "-c", "redis-server --requirepass \"$${REDIS_PASSWORD}\" --appendonly yes"]
     volumes:
       - tiktok_platform_redis_data:/data
@@ -54,11 +56,13 @@ services:
     container_name: ${CONTAINER_PREFIX:-tiktok-platform}-minio
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ruoyi}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-ruoyi123}
-    ports:
-      - "${MINIO_API_PUBLISHED_PORT:-19000}:9000"
-      - "${MINIO_CONSOLE_PUBLISHED_PORT:-19001}:9001"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
+    # MinIO 控制台 9001 严禁公网暴露；API 9000 也只走 docker 内网，
+    # 如需要让浏览器直传，再单独在 nginx 加一个授权的 /minio/ 反代。
+    expose:
+      - "9000"
+      - "9001"
     command: server /data --console-address ":9001"
     volumes:
       - tiktok_platform_minio_data:/data
@@ -74,14 +78,16 @@ services:
       TZ: Asia/Shanghai
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ry-vue}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USERNAME:?MYSQL_USERNAME must be set}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set}
       SNAIL_JOB_SERVER_HOST: snailjob
       SNAIL_JOB_SERVER_PORT: 17888
       SPRING_BOOT_ADMIN_CLIENT_ENABLED: "false"
-    ports:
-      - "${SNAILJOB_WEB_PUBLISHED_PORT:-18800}:8800"
-      - "${SNAILJOB_SERVER_PUBLISHED_PORT:-17889}:17888"
+    # 不对外暴露任何端口：API 通过 docker 内网访问 snailjob，
+    # web 控制台不再走公网（公网入口由 nginx 限制 IP 白名单后再决定是否开放）。
+    expose:
+      - "8800"
+      - "17888"
     depends_on:
       mysql:
         condition: service_healthy
@@ -101,26 +107,34 @@ services:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ry-vue}
-      MYSQL_USERNAME: root
-      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_USERNAME: ${MYSQL_USERNAME:?MYSQL_USERNAME must be set}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-ruoyi123}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
       SNAIL_JOB_SERVER_HOST: snailjob
       SNAIL_JOB_SERVER_PORT: 17888
       SNAIL_JOB_HOST: api
       SNAIL_JOB_PORT: 28088
+      SNAIL_JOB_TOKEN: ${SNAIL_JOB_TOKEN:?SNAIL_JOB_TOKEN must be set}
+      SA_TOKEN_JWT_SECRET: ${SA_TOKEN_JWT_SECRET:?SA_TOKEN_JWT_SECRET must be set}
+      API_DECRYPT_REQUEST_PRIVATE_KEY: ${API_DECRYPT_REQUEST_PRIVATE_KEY:?API_DECRYPT_REQUEST_PRIVATE_KEY must be set}
+      API_DECRYPT_RESPONSE_PUBLIC_KEY: ${API_DECRYPT_RESPONSE_PUBLIC_KEY:?API_DECRYPT_RESPONSE_PUBLIC_KEY must be set}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS must be set, e.g. https://app.example.com}
       TIKHUB_ENABLED: ${TIKHUB_ENABLED:-false}
       TIKHUB_API_TOKEN: ${TIKHUB_API_TOKEN:-}
-      WECHAT_MINIAPP_APPID: ${WECHAT_MINIAPP_APPID:-}
-      WECHAT_MINIAPP_APP_SECRET: ${WECHAT_MINIAPP_APP_SECRET:-}
-      WECHAT_MINIAPP_MOCK_ENABLED: ${WECHAT_MINIAPP_MOCK_ENABLED:-true}
-      MINIAPP_WECHAT_APPID: ${WECHAT_MINIAPP_APPID:-}
-      MINIAPP_WECHAT_APP_SECRET: ${WECHAT_MINIAPP_APP_SECRET:-}
-      MINIAPP_WECHAT_MOCK_ENABLED: ${WECHAT_MINIAPP_MOCK_ENABLED:-true}
+      WECHAT_MINIAPP_APPID: ${WECHAT_MINIAPP_APPID:?WECHAT_MINIAPP_APPID must be set}
+      WECHAT_MINIAPP_APP_SECRET: ${WECHAT_MINIAPP_APP_SECRET:?WECHAT_MINIAPP_APP_SECRET must be set}
+      # prod profile 下后端硬拒绝 mock 登录路径，这里的开关只对 dev/test 生效，
+      # 保留可配置仅为 staging/local 调试。
+      WECHAT_MINIAPP_MOCK_ENABLED: ${WECHAT_MINIAPP_MOCK_ENABLED:-false}
+      MINIAPP_WECHAT_APPID: ${WECHAT_MINIAPP_APPID:?WECHAT_MINIAPP_APPID must be set}
+      MINIAPP_WECHAT_APP_SECRET: ${WECHAT_MINIAPP_APP_SECRET:?WECHAT_MINIAPP_APP_SECRET must be set}
+      MINIAPP_WECHAT_MOCK_ENABLED: ${WECHAT_MINIAPP_MOCK_ENABLED:-false}
       JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m}
-    ports:
-      - "${API_PUBLISHED_PORT:-8088}:8088"
+    # API 不需要直接对外；流量统一由 web/nginx 经 /prod-api 反代过来。
+    expose:
+      - "8088"
     volumes:
       - tiktok_platform_api_logs:/app/logs
     depends_on:
@@ -139,7 +153,12 @@ services:
     container_name: ${CONTAINER_PREFIX:-tiktok-platform}-web
     restart: unless-stopped
     ports:
-      - "${WEB_PUBLISHED_PORT:-80}:80"
+      # 仅 web/nginx 这一层对外暴露：80 用于 HTTP→HTTPS 跳转，443 承载 TLS。
+      # 证书 / privkey 通过 ./ssl 目录挂入容器，文件名见 nginx.conf。
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       api:
         condition: service_started
