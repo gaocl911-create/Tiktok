@@ -86,11 +86,15 @@
             <artifactId>ruoyi-generator</artifactId>
         </dependency>
 
-        <!--  demo模块  -->
+        <!--  demo模块 — 默认不打入 prod 包。只有显式 -Pinclude-demo 才会加入依赖。
+              demo 模块包含 RedisCacheController / SaTokenTestController 等无认证的演示接口，
+              生产环境不允许暴露。  -->
+        <!--
         <dependency>
             <groupId>org.dromara</groupId>
             <artifactId>ruoyi-demo</artifactId>
         </dependency>
+        -->
 
         <!--  工作流模块  -->
         <dependency>

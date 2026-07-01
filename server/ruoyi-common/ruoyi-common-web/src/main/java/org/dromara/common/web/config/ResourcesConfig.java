@@ -5,6 +5,7 @@ import cn.hutool.core.date.DateUtil;
 import org.dromara.common.core.utils.ObjectUtils;
 import org.dromara.common.web.handler.GlobalExceptionHandler;
 import org.dromara.common.web.interceptor.PlusWebInvokeTimeInterceptor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.format.FormatterRegistry;
@@ -15,7 +16,9 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 通用配置
@@ -48,14 +51,35 @@ public class ResourcesConfig implements WebMvcConfigurer {
     }
 
     /**
+     * 允许跨域的 origin 列表（逗号分隔）。
+     * 留空 → 关闭 CORS（拒绝所有跨域请求）。
+     * 单值 "*" → 允许任意来源但禁用 credentials（dev/local 默认行为）。
+     * 显式域名 → 按白名单匹配且允许携带 credentials（prod 必须走此分支）。
+     */
+    @Value("${cors.allowed-origins:*}")
+    private String allowedOrigins;
+
+    /**
      * 跨域配置
      */
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowCredentials(true);
-        // 设置访问源地址
-        config.addAllowedOriginPattern("*");
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+            .map(s -> s.trim())
+            .filter(s -> !s.isEmpty())
+            .toList();
+
+        if (origins.size() == 1 && "*".equals(origins.get(0))) {
+            // 通配模式：禁用 credentials（CORS 规范禁止 * + credentials 组合）。
+            config.setAllowCredentials(false);
+            config.addAllowedOriginPattern("*");
+        } else {
+            // 白名单模式：精确匹配，允许携带 cookie / Authorization。
+            config.setAllowCredentials(true);
+            origins.forEach(config::addAllowedOrigin);
+        }
+
         // 设置访问源请求头
         config.addAllowedHeader("*");
         // 设置访问源请求方法

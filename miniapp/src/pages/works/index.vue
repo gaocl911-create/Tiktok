@@ -35,7 +35,7 @@
       <wd-button @click="openTasks">去任务广场</wd-button>
     </view>
 
-    <view v-for="claim in claims" v-else :key="claim.claimId" class="surface work-card">
+    <view v-for="claim in claims" v-else :key="claim.claimId" class="surface work-card" @click="openDetail(claim)">
       <view class="work-head">
         <view class="work-main">
           <text :class="['pill', statusTone(claim.claimStatus)]">{{ statusText(claim.claimStatus) }}</text>
@@ -59,10 +59,10 @@
         </view>
       </view>
 
-      <wd-button v-if="canSubmit(claim.claimStatus)" block @click="openSubmit(claim)">
+      <wd-button v-if="canSubmit(claim.claimStatus)" block @click.stop="openSubmit(claim)">
         提交作品链接
       </wd-button>
-      <wd-button v-else block plain @click="openTasks">继续领取任务</wd-button>
+      <wd-button v-else block plain @click.stop="openTasks">继续领取任务</wd-button>
     </view>
   </view>
 </template>
@@ -179,6 +179,12 @@ const openSubmit = (claim: TaskClaim) => {
     url: `/pages/works/submit?claimId=${encodeURIComponent(String(claim.claimId))}&taskTitle=${encodeURIComponent(
       claim.taskTitle || "",
     )}&platform=${encodeURIComponent(claim.platform || "")}`,
+  });
+};
+
+const openDetail = (claim: TaskClaim) => {
+  uni.navigateTo({
+    url: `/pages/works/detail?claimId=${encodeURIComponent(String(claim.claimId))}`,
   });
 };
 

@@ -45,6 +45,14 @@ export interface TaskClaim {
   imageId?: number | string;
   assignedImageUrl?: string;
   assignedImageName?: string;
+  submissionId?: number | string;
+  contentUrl?: string;
+  contentDesc?: string;
+  screenshotUrl?: string;
+  submissionStatus?: SubmissionStatus;
+  auditTime?: string;
+  rejectReason?: string;
+  monitorContentId?: number | string;
 }
 
 export interface TaskSubmission {

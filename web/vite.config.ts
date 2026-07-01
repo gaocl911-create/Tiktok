@@ -67,6 +67,8 @@ export default defineConfig(({ mode, command }) => {
         'image-conversion',
         'element-plus/es/components/**/css'
       ]
-    }
+    },
+    // 生产构建：移除 console / debugger，源代码里的日志不会出现在 dist 中。
+    esbuild: command === 'build' ? { drop: ['console', 'debugger'] } : undefined
   };
 });
