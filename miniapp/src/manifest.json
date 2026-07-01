@@ -1,6 +1,6 @@
 {
     "name" : "创作者兼职任务",
-    "appid" : "wx66e41e6f46cf2d23",
+    "appid" : "wxa046df0d75f9a06c",
     "description" : "兼职人员领取推广任务、提交作品并查看佣金。",
     "versionName" : "1.0.0",
     "versionCode" : "100",
@@ -50,7 +50,7 @@
     "quickapp" : {},
     /* 小程序特有相关 */
     "mp-weixin" : {
-        "appid" : "wx66e41e6f46cf2d23",
+        "appid" : "wxa046df0d75f9a06c",
         "setting" : {
             "urlCheck" : false
         },
