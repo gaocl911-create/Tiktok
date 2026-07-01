@@ -28,6 +28,7 @@ services:
       - ../sql/creator_snailjob_job.sql:/docker-entrypoint-initdb.d/14-creator-snailjob-job.sql:ro
       - ../sql/creator_monitor_p0_repair.sql:/docker-entrypoint-initdb.d/15-creator-monitor-p0-repair.sql:ro
       - ../sql/parttime_staff_schema.sql:/docker-entrypoint-initdb.d/16-parttime-staff-schema.sql:ro
+      - ../sql/parttime_material_library_schema.sql:/docker-entrypoint-initdb.d/17-parttime-material-library-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
@@ -67,6 +68,24 @@ services:
     volumes:
       - tiktok_platform_minio_data:/data
 
+  snailjob-token-sync:
+    image: mysql:8.0.42
+    container_name: ${CONTAINER_PREFIX:-tiktok-platform}-snailjob-token-sync
+    restart: "no"
+    environment:
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ry-vue}
+      SNAIL_JOB_TOKEN: ${SNAIL_JOB_TOKEN:?SNAIL_JOB_TOKEN must be set}
+    command:
+      - sh
+      - -c
+      - |
+        printf "UPDATE sj_group_config SET token='%s' WHERE namespace_id='prod' AND group_name='ruoyi_group';\n" "$$SNAIL_JOB_TOKEN" > /tmp/sync-snailjob-token.sql
+        mysql -hmysql -uroot "$$MYSQL_DATABASE" < /tmp/sync-snailjob-token.sql
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   snailjob:
     build:
       context: ..
@@ -91,6 +110,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      snailjob-token-sync:
+        condition: service_completed_successfully
 
   api:
     build:
@@ -144,11 +165,26 @@ services:
         condition: service_healthy
       snailjob:
         condition: service_started
+      snailjob-token-sync:
+        condition: service_completed_successfully
 
   web:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.web
+      args:
+        VITE_APP_TITLE: ${WEB_APP_TITLE:-创作者监测}
+        VITE_APP_LOGO_TITLE: ${WEB_APP_LOGO_TITLE:-创作者监测}
+        VITE_APP_ENV: production
+        VITE_APP_CONTEXT_PATH: ${WEB_CONTEXT_PATH:-/}
+        VITE_APP_MONITOR_ADMIN: ${WEB_MONITOR_ADMIN:-/admin/applications}
+        VITE_APP_SNAILJOB_ADMIN: ${WEB_SNAILJOB_ADMIN:-/snail-job}
+        VITE_APP_BASE_API: ${WEB_BASE_API:-/prod-api}
+        VITE_BUILD_COMPRESS: ${WEB_BUILD_COMPRESS:-gzip}
+        VITE_APP_RSA_PUBLIC_KEY: ${WEB_RSA_PUBLIC_KEY:?WEB_RSA_PUBLIC_KEY must be set}
+        VITE_APP_CLIENT_ID: ${WEB_CLIENT_ID:?WEB_CLIENT_ID must be set}
+        VITE_APP_WEBSOCKET: ${WEB_WEBSOCKET:-false}
+        VITE_APP_SSE: ${WEB_SSE:-true}
     image: tiktok-platform-web:latest
     container_name: ${CONTAINER_PREFIX:-tiktok-platform}-web
     restart: unless-stopped
