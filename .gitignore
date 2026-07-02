@@ -3,6 +3,9 @@
 /.env.*
 !/.env.example
 deploy/.env.prod
+# 本地密码本（永远不入库）
+SECRETS.local.md
+*.local.md
 application-local.yml
 application-local.yaml
 server/ruoyi-admin/src/main/resources/application-dev.yml
