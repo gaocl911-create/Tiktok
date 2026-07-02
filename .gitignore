@@ -3,6 +3,7 @@
 /.env.*
 !/.env.example
 deploy/.env.prod
+deploy/.env.prod.generated
 # 本地密码本（永远不入库）
 SECRETS.local.md
 *.local.md
