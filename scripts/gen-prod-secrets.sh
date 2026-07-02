@@ -101,7 +101,7 @@ WEB_SSE=true
 CORS_ALLOWED_ORIGINS=${DOMAIN}
 
 # ---------- TikHub ----------
-TIKHUB_ENABLED=false
+TIKHUB_ENABLED=true
 TIKHUB_API_TOKEN=
 
 # ---------- WeChat Mini Program ----------
