@@ -202,9 +202,7 @@ if ([string]::IsNullOrWhiteSpace($result["API_DECRYPT_REQUEST_PRIVATE_KEY"]) -or
 
 $normalizedDomain = Normalize-Domain $Domain
 if ($normalizedDomain) {
-  if ([string]::IsNullOrWhiteSpace($result["CORS_ALLOWED_ORIGINS"])) {
-    $result["CORS_ALLOWED_ORIGINS"] = $normalizedDomain
-  }
+  $result["CORS_ALLOWED_ORIGINS"] = $normalizedDomain
 }
 
 $missing = @()
